@@ -1,3 +1,4 @@
+# app.py
 import re
 import io
 import base64
@@ -17,7 +18,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 from reportlab.lib.colors import HexColor
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
                                  TableStyle, PageBreak)
 from reportlab.graphics.shapes import Drawing
@@ -26,18 +27,25 @@ from reportlab.graphics.charts.linecharts import HorizontalLineChart
 st.set_page_config(page_title="Dashboard Financeiro Premium", layout="wide", page_icon="📊")
 
 # ---------------------------------------------------------------------------
-# Paleta — Azul Maldivas
+# Paleta — UI (cartões/cabeçalhos, sempre com fundo próprio) vs. Gráficos
+# (precisam ficar visíveis tanto no tema claro quanto escuro do Streamlit)
 # ---------------------------------------------------------------------------
 C_NAVY = "#0a1628"
 C_NAVY2 = "#1a3a5c"
 C_TEAL = "#2e86ab"
-C_TEAL_LIGHT = "#7dd3fc"
-C_SUCCESS = "#00d4aa"
-C_DANGER = "#ff6b6b"
-C_GOLD = "#feca57"
-C_GOLD_MEDAL, C_SILVER, C_BRONZE = "#ffd700", "#c0c0c0", "#cd7f32"
-C_CARD_BG = "#ffffff"
 C_TEXT_DARK = "#0a1628"
+C_GOLD_MEDAL, C_SILVER, C_BRONZE = "#ffd700", "#c0c0c0", "#cd7f32"
+
+# cores "de dado" — vivas o bastante para não sumir em nenhum dos dois temas
+CH_BLUE = "#4fb3e8"
+CH_BLUE_LIGHT = "#7dd3fc"
+CH_GOLD = "#feca57"
+CH_SUCCESS = "#00d4aa"
+CH_DANGER = "#ff6b6b"
+CH_DANGER_LIGHT = "#ffb4b4"
+CH_PURPLE = "#a78bfa"
+CH_PINK = "#f472b6"
+CH_QUALITATIVE = [CH_BLUE, CH_GOLD, CH_SUCCESS, CH_PURPLE, CH_PINK, CH_DANGER, CH_BLUE_LIGHT]
 
 MESES_ORDEM = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 MES_PREFIX = {"JAN": "Jan", "FEV": "Fev", "MAR": "Mar", "ABR": "Abr", "MAI": "Mai", "JUN": "Jun",
@@ -47,7 +55,8 @@ QUARTER_MONTHS = {"1º Tri": ["Jan", "Fev", "Mar"], "2º Tri": ["Abr", "Mai", "J
 QUARTER_OF = {m: q for q, ms in QUARTER_MONTHS.items() for m in ms}
 
 # ---------------------------------------------------------------------------
-# CSS
+# CSS — todo elemento com fundo próprio define sua cor de texto explicitamente,
+# para não herdar a cor de texto do tema (evita texto invisível no modo escuro)
 # ---------------------------------------------------------------------------
 st.markdown(f"""
 <style>
@@ -56,36 +65,63 @@ st.markdown(f"""
     50% {{ background-position: 100% 50%; }}
     100% {{ background-position: 0% 50%; }}
 }}
-.hero {{
-    background: linear-gradient(135deg, {C_NAVY} 0%, {C_NAVY2} 40%, {C_TEAL} 100%);
+.hero {{ background: linear-gradient(135deg, {C_NAVY} 0%, {C_NAVY2} 40%, {C_TEAL} 100%);
     background-size: 200% 200%; animation: gradientShift 8s ease infinite;
     padding: 28px 32px; border-radius: 16px; color: white; margin-bottom: 20px;
-    box-shadow: 0 8px 24px rgba(10,22,40,.35);
-}}
-.hero h1 {{ margin:0; font-size: 27px; }}
-.hero p {{ margin:4px 0 0 0; opacity:.9; font-size:13px; }}
-.kpi-card {{ border-radius: 16px; padding: 18px 16px; text-align:center; background:{C_CARD_BG};
-    box-shadow: 0 4px 16px rgba(10,22,40,.10); border:1px solid #eef1f5; transition:.15s; }}
+    box-shadow: 0 8px 24px rgba(10,22,40,.35); }}
+.hero h1 {{ margin:0; font-size: 27px; color:white; }}
+.hero p {{ margin:4px 0 0 0; opacity:.9; font-size:13px; color:white; }}
+.kpi-card {{ border-radius: 16px; padding: 18px 16px; text-align:center; background:#ffffff;
+    color:{C_TEXT_DARK}; box-shadow: 0 4px 16px rgba(10,22,40,.10); border:1px solid #eef1f5;
+    transition:.15s; }}
 .kpi-card:hover {{ box-shadow: 0 10px 24px rgba(10,22,40,.16); transform: translateY(-2px); }}
 .kpi-label {{ font-size:11px; font-weight:800; color:#5a6b7d; letter-spacing:.6px; text-transform:uppercase;}}
 .kpi-value {{ font-size:24px; font-weight:800; color:{C_TEXT_DARK}; margin:6px 0 2px 0;}}
-.kpi-delta-up {{ font-size:12px; font-weight:700; color:{C_SUCCESS}; }}
-.kpi-delta-down {{ font-size:12px; font-weight:700; color:{C_DANGER}; }}
-.section-title {{ font-size:19px; font-weight:800; color:{C_NAVY2}; margin:22px 0 12px 0;
-    border-bottom:3px solid {C_TEAL}; padding-bottom:6px; }}
+.kpi-delta-up {{ font-size:12px; font-weight:700; color:#00916e; }}
+.kpi-delta-down {{ font-size:12px; font-weight:700; color:#d9364a; }}
+.section-title {{ font-size:19px; font-weight:800; color: var(--text-color, {C_NAVY2});
+    margin:22px 0 12px 0; border-bottom:3px solid {C_TEAL}; padding-bottom:6px; }}
 .legenda-box {{ background:#f4f8fb; border-left:4px solid {C_TEAL}; border-radius:8px;
     padding:12px 16px; font-size:12.5px; color:#33475b; margin-bottom:6px; }}
 .filtro-box {{ background:linear-gradient(135deg,{C_NAVY} 0%,{C_NAVY2} 100%); border-radius:14px;
     padding:16px 20px; color:white; margin-bottom:14px; }}
+.filtro-box b, .filtro-box span {{ color:white; }}
 .socio-card {{ border-radius:16px; padding:18px; color:white; box-shadow:0 4px 16px rgba(10,22,40,.15);}}
+.socio-card b, .socio-card span, .socio-card h2 {{ color:white; }}
 .rank-card {{ border-radius:14px; padding:14px 16px; display:flex; align-items:center; gap:14px;
-    box-shadow:0 3px 12px rgba(10,22,40,.08); margin-bottom:10px; background:white; }}
+    box-shadow:0 3px 12px rgba(10,22,40,.08); margin-bottom:10px; background:white; color:{C_TEXT_DARK}; }}
 .rank-medal {{ font-size:30px; }}
 .total-box {{ border-radius:12px; padding:14px 18px; font-weight:700; font-size:15px; margin-top:8px; }}
+.empty-state {{ background:linear-gradient(135deg, rgba(46,134,171,.07), rgba(10,22,40,.03));
+    border:1.5px dashed {C_TEAL}; border-radius:14px; padding:26px; text-align:center;
+    color:#5a6b7d; margin-bottom:8px; }}
+.empty-state-icon {{ font-size:30px; margin-bottom:8px; }}
+.empty-state-msg {{ font-size:13px; }}
 </style>
 """, unsafe_allow_html=True)
 
 PLOTLY_CONFIG = {"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"]}
+
+def empty_state(icon, message):
+    st.markdown(f"""<div class="empty-state"><div class="empty-state-icon">{icon}</div>
+    <div class="empty-state-msg">{message}</div></div>""", unsafe_allow_html=True)
+
+def style_fig(fig, height=None):
+    """Deixa o gráfico legível tanto no tema claro quanto no escuro do Streamlit:
+    fundo transparente + grade/texto em cinza neutro (bom contraste nos dois temas)."""
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#8a99ab", size=12),
+        legend=dict(font=dict(color="#8a99ab")),
+        margin=dict(t=50, b=40, l=10, r=10),
+    )
+    fig.update_xaxes(gridcolor="rgba(140,150,160,.25)", zerolinecolor="rgba(140,150,160,.45)",
+                      linecolor="rgba(140,150,160,.4)")
+    fig.update_yaxes(gridcolor="rgba(140,150,160,.25)", zerolinecolor="rgba(140,150,160,.45)",
+                      linecolor="rgba(140,150,160,.4)")
+    if height:
+        fig.update_layout(height=height)
+    return fig
 
 # ---------------------------------------------------------------------------
 # Helpers gerais
@@ -138,7 +174,7 @@ def month_from_value(v):
         if v is None or pd.isna(v):
             return None
     except (TypeError, ValueError):
-        pass  # v não é um tipo "nulável" (ex.: string) — segue o fluxo normal abaixo
+        pass
     if isinstance(v, (pd.Timestamp, datetime)):
         return MESES_ORDEM[v.month - 1]
     s = str(v).strip()
@@ -152,6 +188,10 @@ def month_from_value(v):
         return MESES_ORDEM[dt.month - 1]
     except Exception:
         return None
+
+def detect_month_name(sheet_name):
+    clean = re.sub(r"[^A-Za-zÀ-ÿ]", "", sheet_name).upper()[:3].replace("Ç", "C")
+    return MES_PREFIX.get(clean)
 
 # ---------------------------------------------------------------------------
 # Parsing "DRE 2026"
@@ -256,7 +296,7 @@ def parse_shares(wb):
     return float(partner or 0.7), float(maldivas or 0.3)
 
 # ---------------------------------------------------------------------------
-# Parsing "ASSERTIF DIRETO" (transações) e "DESPESAS"
+# Parsing de transações — caminho padrão: aba única (ex. "ASSERTIF DIRETO")
 # ---------------------------------------------------------------------------
 def parse_transacoes(file_bytes, sheet_name):
     try:
@@ -284,6 +324,71 @@ def parse_transacoes(file_bytes, sheet_name):
     out["Valor"] = df[col_comissao].apply(parse_number)
     out = out[out["Valor"] != 0]
     return out if not out.empty else None
+
+# ---------------------------------------------------------------------------
+# EXCEÇÃO — RJ+2026: sem aba consolidada; Seguradora/Produto/Originador/Cliente
+# vêm das abas mensais (JAN_2026, FEV_2026...). Mapeamento assumido:
+#   coluna "PRODUTO"   (ex.: AMIL)               -> nossa "Seguradora"
+#   coluna "CATEGORIA" (ex.: Seguros Corporativos) -> nosso "Produto"
+#   "CÓD. ASSESSOR"    + aba BASE (COD INTERNO -> NOME ASSESSOR) -> "Originador"
+#   "NOME CLIENTE"                                -> "Cliente"
+#   "COMISSÃO BRUTA D.A" (exclui "PARTNER"/"RECEBIDA")           -> "Valor"
+# ---------------------------------------------------------------------------
+def parse_transacoes_from_monthly(wb):
+    code_to_name = {}
+    if "BASE" in wb.sheetnames:
+        base_ws = wb["BASE"]
+        code_col = name_col = None
+        for c in range(1, base_ws.max_column + 1):
+            h = _norm(base_ws.cell(row=1, column=c).value)
+            if "COD INTERNO" in h:
+                code_col = c
+            if "NOME ASSESSOR" in h:
+                name_col = c
+        if code_col and name_col:
+            for r in range(2, base_ws.max_row + 1):
+                code = base_ws.cell(row=r, column=code_col).value
+                name = base_ws.cell(row=r, column=name_col).value
+                if code and name and str(code).strip() not in code_to_name:
+                    code_to_name[str(code).strip()] = str(name).strip()
+
+    records = []
+    for sheet_name in wb.sheetnames:
+        mes = detect_month_name(sheet_name)
+        if not mes:
+            continue
+        ws = wb[sheet_name]
+        col_assessor = col_cliente = col_categoria = col_produto = col_valor = None
+        for c in range(1, ws.max_column + 1):
+            h = _norm(ws.cell(row=2, column=c).value)
+            if "ASSESSOR" in h and "COD" in h:
+                col_assessor = c
+            if "NOME CLIENTE" in h:
+                col_cliente = c
+            if h == "CATEGORIA":
+                col_categoria = c
+            if h == "PRODUTO":
+                col_produto = c
+            if "COMISS" in h and "D.A" in h and "PARTNER" not in h and "RECEBIDA" not in h:
+                col_valor = c
+        if not col_valor:
+            continue
+        for r in range(3, ws.max_row + 1):
+            val = ws.cell(row=r, column=col_valor).value
+            if not val:
+                continue
+            code = ws.cell(row=r, column=col_assessor).value if col_assessor else None
+            cliente = ws.cell(row=r, column=col_cliente).value if col_cliente else None
+            categoria = ws.cell(row=r, column=col_categoria).value if col_categoria else None
+            produto = ws.cell(row=r, column=col_produto).value if col_produto else None
+            originador = code_to_name.get(str(code).strip(), str(code).strip()) if code else "Não informado"
+            records.append((mes, str(cliente).strip() if cliente else "Não informado",
+                             str(produto).strip() if produto else "Não informado",
+                             str(categoria).strip() if categoria else "Não informado",
+                             originador, float(val)))
+    if not records:
+        return None
+    return pd.DataFrame(records, columns=["Mes", "Cliente", "Seguradora", "Produto", "Originador", "Valor"])
 
 def parse_despesas(file_bytes, sheet_name):
     try:
@@ -313,10 +418,15 @@ def parse_workbook(file_bytes, file_name):
     if df is None:
         return None
     shares = parse_shares(wb)
+
     sheet_receitas = find_sheet(wb.sheetnames, "DIRETO", "RECEITA")
-    sheet_despesas = find_sheet(wb.sheetnames, "DESPES")
     tx = parse_transacoes(file_bytes, sheet_receitas) if sheet_receitas else None
+    if tx is None:
+        tx = parse_transacoes_from_monthly(wb)  # exceção RJ+2026
+
+    sheet_despesas = find_sheet(wb.sheetnames, "DESPES")
     desp = parse_despesas(file_bytes, sheet_despesas) if sheet_despesas else None
+
     return {"file_name": file_name, "df": df, "shares": shares, "tx": tx, "desp": desp}
 
 def months_with_data(parsed_list, selected_files):
@@ -420,7 +530,7 @@ if not available_months:
 quarters_available = [q for q in ["1º Tri", "2º Tri", "3º Tri", "4º Tri"]
                        if any(m in available_months for m in QUARTER_MONTHS[q])]
 
-if "sel_months" not in st.session_state or not set(st.session_state.sel_months).issubset(set(available_months) | {None}):
+if "sel_months" not in st.session_state or not set(st.session_state.sel_months).issubset(set(available_months)):
     st.session_state.sel_months = available_months
 if "sel_quarters" not in st.session_state:
     st.session_state.sel_quarters = quarters_available
@@ -548,18 +658,18 @@ st.markdown(f"""<div class="legenda-box">
 st.markdown('<div class="section-title">📈 Evolução Mensal</div>', unsafe_allow_html=True)
 crescimento = receita_mensal.pct_change() * 100
 
-fig_evol = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.06,
+fig_evol = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.08,
                           subplot_titles=("Receita Bruta", "Crescimento (%)", "Resultado Operacional"))
-fig_evol.add_bar(x=combined.index, y=receita_mensal, name="Receita Bruta", marker_color=C_TEAL, row=1, col=1,
+fig_evol.add_bar(x=combined.index, y=receita_mensal, name="Receita Bruta", marker_color=CH_BLUE, row=1, col=1,
                   hovertemplate="R$ %{y:,.0f}<extra></extra>")
 fig_evol.add_trace(go.Scatter(x=combined.index, y=crescimento, mode="lines+markers", name="Crescimento %",
-                               line=dict(color=C_GOLD, width=3), hovertemplate="%{y:.1f}%<extra></extra>"), row=2, col=1)
-fig_evol.add_hline(y=0, line_dash="dot", line_color="#999", row=2, col=1)
-cores_resultado = [C_SUCCESS if v >= 0 else C_DANGER for v in combined["ResultadoOperacional"]]
+                               line=dict(color=CH_GOLD, width=3), hovertemplate="%{y:.1f}%<extra></extra>"), row=2, col=1)
+fig_evol.add_hline(y=0, line_dash="dot", line_color="rgba(140,150,160,.6)", row=2, col=1)
+cores_resultado = [CH_SUCCESS if v >= 0 else CH_DANGER for v in combined["ResultadoOperacional"]]
 fig_evol.add_bar(x=combined.index, y=combined["ResultadoOperacional"], name="Resultado Operacional",
                   marker_color=cores_resultado, row=3, col=1, hovertemplate="R$ %{y:,.0f}<extra></extra>")
-fig_evol.update_layout(height=650, showlegend=False, hovermode="x unified")
-st.plotly_chart(fig_evol, use_container_width=True, config=PLOTLY_CONFIG)
+fig_evol.update_layout(showlegend=False)
+st.plotly_chart(style_fig(fig_evol, height=650), use_container_width=True, config=PLOTLY_CONFIG)
 
 tab_r = pd.DataFrame({"Mês": combined.index, "Receita Bruta": receita_mensal.values,
                        "Crescimento": ["-"] + [f"{v:+.1f}%" for v in crescimento.values[1:]],
@@ -574,12 +684,12 @@ st.markdown('<div class="section-title">🏢 Ranking — Seguradoras</div>', uns
 if combined_tx is not None and (combined_tx["Seguradora"] != "Não informado").any():
     rank_seg = combined_tx.groupby("Seguradora")["Valor"].sum().sort_values(ascending=False).head(15)
     fig_seg = px.bar(rank_seg[::-1], orientation="h", labels={"value": "R$", "Seguradora": ""},
-                      color=rank_seg[::-1].values, color_continuous_scale=[C_TEAL_LIGHT, C_NAVY2])
-    fig_seg.update_layout(showlegend=False, coloraxis_showscale=False, hovermode="y unified")
+                      color=rank_seg[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
+    fig_seg.update_layout(showlegend=False, coloraxis_showscale=False)
     fig_seg.update_traces(hovertemplate="R$ %{x:,.0f}<extra></extra>")
-    st.plotly_chart(fig_seg, use_container_width=True, config=PLOTLY_CONFIG)
+    st.plotly_chart(style_fig(fig_seg), use_container_width=True, config=PLOTLY_CONFIG)
 else:
-    st.info("Coluna 'Seguradora' não encontrada na aba de receitas — ranking indisponível.")
+    empty_state("🏢", "Coluna de Seguradora não encontrada na aba de receitas — ranking indisponível.")
 
 # ---------------------------------------------------------------------------
 # Distribuição de Resultados — Sócios
@@ -600,16 +710,16 @@ s2.markdown(f"""<div class="socio-card" style="background:linear-gradient(135deg
 <span style="font-size:12px;opacity:.9;">Participação operacional</span></div>""", unsafe_allow_html=True)
 
 fig_soc = go.Figure()
-fig_soc.add_bar(x=combined.index, y=combined["SocioPartner"], name="Sócio Partner", marker_color=C_NAVY2)
-fig_soc.add_bar(x=combined.index, y=combined["SocioMaldivas"], name="Sócio Maldivas", marker_color=C_TEAL)
+fig_soc.add_bar(x=combined.index, y=combined["SocioPartner"], name="Sócio Partner", marker_color=CH_PURPLE)
+fig_soc.add_bar(x=combined.index, y=combined["SocioMaldivas"], name="Sócio Maldivas", marker_color=CH_BLUE)
 fig_soc.add_trace(go.Scatter(x=combined.index, y=combined["ResultadoOperacional"], name="Resultado Total",
-                              mode="lines+markers", line=dict(color=C_GOLD, width=3)))
-fig_soc.add_hline(y=0, line_dash="dot", line_color="#999")
-fig_soc.update_layout(barmode="group", hovermode="x unified", legend=dict(orientation="h", y=-0.2))
-st.plotly_chart(fig_soc, use_container_width=True, config=PLOTLY_CONFIG)
+                              mode="lines+markers", line=dict(color=CH_GOLD, width=3)))
+fig_soc.add_hline(y=0, line_dash="dot", line_color="rgba(140,150,160,.6)")
+fig_soc.update_layout(barmode="group", legend=dict(orientation="h", y=-0.2))
+st.plotly_chart(style_fig(fig_soc), use_container_width=True, config=PLOTLY_CONFIG)
 
-bg_total = "rgba(0,212,170,.12)" if resultado_operacional >= 0 else "rgba(255,107,107,.12)"
-color_total = C_SUCCESS if resultado_operacional >= 0 else C_DANGER
+bg_total = "rgba(0,212,170,.14)" if resultado_operacional >= 0 else "rgba(255,107,107,.14)"
+color_total = "#00916e" if resultado_operacional >= 0 else "#d9364a"
 st.markdown(f"""<div class="total-box" style="background:{bg_total};color:{color_total};">
 Resultado total do período: {fmt_r(resultado_operacional)}</div>""", unsafe_allow_html=True)
 
@@ -631,18 +741,18 @@ if combined_tx is not None and (combined_tx["Produto"] != "Não informado").any(
     p1, p2 = st.columns([1, 1])
     with p1:
         fig_sun = px.sunburst(combined_tx, path=["Seguradora", "Produto"], values="Valor",
-                               color_discrete_sequence=px.colors.sequential.Teal)
+                               color_discrete_sequence=CH_QUALITATIVE)
         fig_sun.update_traces(hovertemplate="%{label}<br>R$ %{value:,.0f}<extra></extra>")
-        st.plotly_chart(fig_sun, use_container_width=True, config=PLOTLY_CONFIG)
+        st.plotly_chart(style_fig(fig_sun), use_container_width=True, config=PLOTLY_CONFIG)
     with p2:
         rank_prod = combined_tx.groupby("Produto")["Valor"].sum().sort_values(ascending=False).head(15)
         fig_prod = px.bar(rank_prod[::-1], orientation="h", labels={"value": "R$", "Produto": ""},
-                           color=rank_prod[::-1].values, color_continuous_scale=[C_TEAL_LIGHT, C_NAVY2])
+                           color=rank_prod[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
         fig_prod.update_layout(showlegend=False, coloraxis_showscale=False)
         fig_prod.update_traces(hovertemplate="R$ %{x:,.0f}<extra></extra>")
-        st.plotly_chart(fig_prod, use_container_width=True, config=PLOTLY_CONFIG)
+        st.plotly_chart(style_fig(fig_prod), use_container_width=True, config=PLOTLY_CONFIG)
 else:
-    st.info("Coluna 'Produto' não encontrada na aba de receitas — análise indisponível.")
+    empty_state("🧩", "Coluna de Produto não encontrada na aba de receitas — análise indisponível.")
 
 # ---------------------------------------------------------------------------
 # Ranking Originadores
@@ -662,10 +772,10 @@ if combined_tx is not None and (combined_tx["Originador"] != "Não informado").a
         labels = list(top_n.index) + (["Outros"] if outros > 0 else [])
         values = list(top_n["Valor"]) + ([outros] if outros > 0 else [])
         fig_don = go.Figure(go.Pie(labels=labels, values=values, hole=.55,
-                                    marker_colors=px.colors.sequential.Teal,
+                                    marker_colors=CH_QUALITATIVE,
                                     hovertemplate="%{label}: R$ %{value:,.0f}<extra></extra>"))
         fig_don.update_layout(title="Participação por Originador")
-        st.plotly_chart(fig_don, use_container_width=True, config=PLOTLY_CONFIG)
+        st.plotly_chart(style_fig(fig_don), use_container_width=True, config=PLOTLY_CONFIG)
     with o2:
         medals, colors_m = ["🥇", "🥈", "🥉"], [C_GOLD_MEDAL, C_SILVER, C_BRONZE]
         for i, row in ranking_df.iterrows():
@@ -676,7 +786,7 @@ if combined_tx is not None and (combined_tx["Originador"] != "Não informado").a
             <span style="font-size:12px;color:#8c8c8c;">{int(row['Operacoes'])} operações | Ticket médio: {fmt_r(row['TicketMedio'])}</span>
             </div></div>""", unsafe_allow_html=True)
 else:
-    st.info("Coluna 'Originador' não encontrada na aba de receitas — ranking indisponível.")
+    empty_state("👥", "Coluna de Originador não encontrada — ranking indisponível.")
 
 # ---------------------------------------------------------------------------
 # Ranking Clientes
@@ -685,12 +795,12 @@ st.markdown('<div class="section-title">🧑‍💼 Ranking — Clientes</div>',
 if combined_tx is not None and (combined_tx["Cliente"] != "Não informado").any():
     rank_cli = combined_tx.groupby("Cliente")["Valor"].sum().sort_values(ascending=False).head(15)
     fig_cli = px.bar(rank_cli[::-1], orientation="h", labels={"value": "R$", "Cliente": ""},
-                      color=rank_cli[::-1].values, color_continuous_scale=[C_TEAL_LIGHT, C_NAVY2])
+                      color=rank_cli[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
     fig_cli.update_layout(showlegend=False, coloraxis_showscale=False)
     fig_cli.update_traces(hovertemplate="R$ %{x:,.0f}<extra></extra>")
-    st.plotly_chart(fig_cli, use_container_width=True, config=PLOTLY_CONFIG)
+    st.plotly_chart(style_fig(fig_cli), use_container_width=True, config=PLOTLY_CONFIG)
 else:
-    st.info("Coluna 'Cliente' não encontrada na aba de receitas — ranking indisponível.")
+    empty_state("🧑‍💼", "Coluna de Cliente não encontrada na aba de receitas — ranking indisponível.")
 
 # ---------------------------------------------------------------------------
 # Ranking Despesas
@@ -699,12 +809,12 @@ st.markdown('<div class="section-title">💸 Ranking — Despesas por Categoria<
 if combined_desp is not None:
     rank_desp = combined_desp.groupby("Categoria")["Valor"].sum().sort_values(ascending=False).head(10)
     fig_desp = px.bar(rank_desp[::-1], orientation="h", labels={"value": "R$", "Categoria": ""},
-                       color=rank_desp[::-1].values, color_continuous_scale=[C_DANGER, C_NAVY2])
+                       color=rank_desp[::-1].values, color_continuous_scale=[CH_DANGER_LIGHT, CH_DANGER])
     fig_desp.update_layout(showlegend=False, coloraxis_showscale=False)
     fig_desp.update_traces(hovertemplate="R$ %{x:,.0f}<extra></extra>")
-    st.plotly_chart(fig_desp, use_container_width=True, config=PLOTLY_CONFIG)
+    st.plotly_chart(style_fig(fig_desp), use_container_width=True, config=PLOTLY_CONFIG)
 else:
-    st.info("Aba 'DESPESAS' não encontrada (ou sem colunas Categoria/Valor) — ranking indisponível.")
+    empty_state("💸", "Aba 'DESPESAS' não encontrada (ou sem colunas Categoria/Valor) — ranking indisponível.")
 
 # ---------------------------------------------------------------------------
 # Resumo Executivo
@@ -727,10 +837,10 @@ st.markdown('<div class="section-title">📋 Resumo Executivo</div>', unsafe_all
 resumo_html = "<table style='width:100%;border-collapse:collapse;'>"
 for label, val, bold in resumo_linhas:
     w = "700" if bold else "400"
-    bg = "#e8f0fe" if bold else "white"
+    bg = "#e8f0fe" if bold else "#ffffff"
     resumo_html += f"""<tr style="background:{bg};">
-    <td style="padding:9px 12px;font-weight:{w};border-bottom:1px solid #eee;">{label}</td>
-    <td style="padding:9px 12px;text-align:right;font-weight:{w};border-bottom:1px solid #eee;">{fmt_r(val)}</td></tr>"""
+    <td style="padding:9px 12px;font-weight:{w};color:{C_TEXT_DARK};border-bottom:1px solid #eee;">{label}</td>
+    <td style="padding:9px 12px;text-align:right;font-weight:{w};color:{C_TEXT_DARK};border-bottom:1px solid #eee;">{fmt_r(val)}</td></tr>"""
 resumo_html += "</table>"
 st.markdown(resumo_html, unsafe_allow_html=True)
 
@@ -752,7 +862,6 @@ def build_pdf():
 
     story = []
 
-    # ---- Capa ----
     cover_content = [
         Spacer(1, 3 * cm),
         Paragraph("Dashboard Financeiro Premium", styles["CoverTitle"]),
@@ -768,7 +877,6 @@ def build_pdf():
     story.append(cover_table)
     story.append(PageBreak())
 
-    # ---- Sumário ----
     story.append(Paragraph("Sumário", styles["SectionTitle"]))
     secoes = ["Indicadores Principais", "Evolução Mensal", "Ranking de Seguradoras",
               "Distribuição de Resultados (Sócios)", "Ranking de Originadores", "Ranking de Clientes",
@@ -777,7 +885,6 @@ def build_pdf():
         story.append(Paragraph(f"{i}. {s}", styles["Body"]))
     story.append(Spacer(1, 0.6 * cm))
 
-    # ---- KPIs ----
     story.append(Paragraph("Indicadores Principais", styles["SectionTitle"]))
     kpi_data = [["Faturamento", "Custos Totais", "Margem Contribuição", "Despesas", "Resultado Operacional"],
                 [fmt_r(receita_total), fmt_r(custos_totais), fmt_r(margem_contribuicao),
@@ -787,6 +894,7 @@ def build_pdf():
         ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("BACKGROUND", (0, 1), (-1, 1), HexColor("#e8f0fe")),
+        ("TEXTCOLOR", (0, 1), (-1, 1), HexColor(C_TEXT_DARK)),
         ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 8.5),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
@@ -797,7 +905,6 @@ def build_pdf():
     story.append(Paragraph(f"Margem de lucro: {fmt_pct(margem_lucro)} · Status: {status}", styles["Body"]))
     story.append(Spacer(1, 0.4 * cm))
 
-    # ---- Evolução Mensal (gráfico de linha nativo) ----
     story.append(Paragraph("Evolução Mensal", styles["SectionTitle"]))
     drawing = Drawing(420, 180)
     lc = HorizontalLineChart()
@@ -805,7 +912,7 @@ def build_pdf():
     lc.data = [list(receita_mensal.values), list(combined["ResultadoOperacional"].values)]
     lc.categoryAxis.categoryNames = list(combined.index)
     lc.lines[0].strokeColor = HexColor(C_TEAL)
-    lc.lines[1].strokeColor = HexColor(C_SUCCESS)
+    lc.lines[1].strokeColor = HexColor(CH_SUCCESS)
     lc.lines[0].strokeWidth = 2
     lc.lines[1].strokeWidth = 2
     drawing.add(lc)
@@ -818,6 +925,7 @@ def build_pdf():
     t_mensal = Table(mensal_rows, colWidths=[3 * cm, 6 * cm, 6 * cm])
     t_mensal.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("TEXTCOLOR", (0, 1), (-1, -1), HexColor(C_TEXT_DARK)),
         ("FONTNAME", (0, 0), (-1, -1), "Helvetica"), ("FONTSIZE", (0, 0), (-1, -1), 9),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")), ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
     ]))
@@ -835,6 +943,7 @@ def build_pdf():
         t = Table(rows, colWidths=[10 * cm, 5 * cm])
         t.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("TEXTCOLOR", (0, 1), (-1, -1), HexColor(C_TEXT_DARK)),
             ("FONTNAME", (0, 0), (-1, -1), "Helvetica"), ("FONTSIZE", (0, 0), (-1, -1), 9),
             ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")), ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
         ]))
@@ -855,6 +964,7 @@ def build_pdf():
     t_socio = Table(socio_rows, colWidths=[5 * cm, 4 * cm, 6 * cm])
     t_socio.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("TEXTCOLOR", (0, 1), (-1, -1), HexColor(C_TEXT_DARK)),
         ("FONTNAME", (0, 0), (-1, -1), "Helvetica"), ("FONTSIZE", (0, 0), (-1, -1), 9.5),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")), ("ALIGN", (1, 0), (-1, -1), "CENTER"),
     ]))
@@ -887,6 +997,7 @@ def build_pdf():
     bold_rows = [i for i, (_, _, bold) in enumerate(resumo_linhas, start=1) if bold]
     style_cmds = [
         ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("TEXTCOLOR", (0, 1), (-1, -1), HexColor(C_TEXT_DARK)),
         ("FONTNAME", (0, 0), (-1, -1), "Helvetica"), ("FONTSIZE", (0, 0), (-1, -1), 9.5),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")), ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
     ]
