@@ -127,7 +127,7 @@ def parse_dre_2026(uploaded_file):
 # ---------------------------------------------------------------------------
 # UI
 # ---------------------------------------------------------------------------
-st.title("📊 Dashboard Financeiro — RJ+ Corretora")
+st.title("📊 Dashboard Financeiro - Partners")
 st.caption("Demonstrativo de Resultado do Exercício 2026 · Produção Direta + Portal MAAS · Valores em R$")
 
 uploaded_files = st.file_uploader(
