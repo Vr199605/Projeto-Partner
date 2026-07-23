@@ -97,30 +97,87 @@ st.markdown(f"""
     color:#5a6b7d; margin-bottom:8px; }}
 .empty-state-icon {{ font-size:30px; margin-bottom:8px; }}
 .empty-state-msg {{ font-size:13px; }}
+
+/* ---------------- Storytelling tab ---------------- */
+.story-hero {{ background: linear-gradient(120deg, {C_NAVY} 0%, {C_NAVY2} 45%, {C_TEAL} 100%);
+    background-size: 200% 200%; animation: gradientShift 10s ease infinite;
+    border-radius:18px; padding:26px 30px; color:white; margin-bottom:18px;
+    box-shadow: 0 10px 28px rgba(10,22,40,.30); }}
+.story-hero .story-kicker {{ font-size:11.5px; font-weight:800; letter-spacing:1.2px;
+    text-transform:uppercase; opacity:.85; color:#dff0ff; }}
+.story-hero h2 {{ margin:6px 0 8px 0; font-size:24px; color:white; line-height:1.35; }}
+.story-hero p {{ margin:0; font-size:13.5px; color:#eaf3fb; opacity:.95; line-height:1.5; }}
+.story-section-title {{ font-size:17px; font-weight:800; color: var(--text-color, {C_NAVY2});
+    margin:26px 0 10px 0; display:flex; align-items:center; gap:8px; }}
+.story-p {{ font-size:13.5px; line-height:1.75; color:#33475b; margin:0 0 10px 0; }}
+.story-grid {{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:12px; margin-bottom:14px; }}
+.story-card {{ border-radius:14px; padding:16px 18px; background:#ffffff; color:{C_TEXT_DARK};
+    box-shadow:0 4px 14px rgba(10,22,40,.08); border-left:5px solid {C_TEAL}; }}
+.story-card.good {{ border-left-color:{CH_SUCCESS}; }}
+.story-card.warn {{ border-left-color:{CH_GOLD}; }}
+.story-card.bad {{ border-left-color:{CH_DANGER}; }}
+.story-card-title {{ font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.4px;
+    color:#5a6b7d; margin-bottom:6px; }}
+.story-card-value {{ font-size:20px; font-weight:800; margin-bottom:4px; }}
+.story-card-note {{ font-size:12px; color:#6b7a8d; line-height:1.5; }}
+.callout {{ border-radius:12px; padding:14px 18px; font-size:13px; line-height:1.6; margin:10px 0 16px 0;
+    border:1px solid rgba(0,0,0,.06); }}
+.callout.info {{ background:rgba(46,134,171,.08); border-left:4px solid {C_TEAL}; color:#1c3a52; }}
+.callout.good {{ background:rgba(0,212,170,.10); border-left:4px solid {CH_SUCCESS}; color:#0a5c47; }}
+.callout.warn {{ background:rgba(254,202,87,.14); border-left:4px solid {CH_GOLD}; color:#6b4e00; }}
+.callout.bad {{ background:rgba(255,107,107,.10); border-left:4px solid {CH_DANGER}; color:#7a1f24; }}
+.callout b {{ color: inherit; }}
+.reco-item {{ display:flex; gap:12px; align-items:flex-start; padding:10px 4px; border-bottom:1px dashed #e3e8ee; }}
+.reco-item:last-child {{ border-bottom:none; }}
+.reco-num {{ flex:0 0 auto; width:26px; height:26px; border-radius:50%; background:{C_TEAL}; color:white;
+    font-weight:800; font-size:12.5px; display:flex; align-items:center; justify-content:center; }}
+.reco-text {{ font-size:13px; line-height:1.6; color:#33475b; }}
+.reco-text b {{ color:{C_NAVY2}; }}
 </style>
 """, unsafe_allow_html=True)
 
-PLOTLY_CONFIG = {"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"]}
+PLOTLY_CONFIG = {"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+                  "scrollZoom": False,
+                  "toImageButtonOptions": {"format": "png", "scale": 2}}
 
 def empty_state(icon, message):
     st.markdown(f"""<div class="empty-state"><div class="empty-state-icon">{icon}</div>
     <div class="empty-state-msg">{message}</div></div>""", unsafe_allow_html=True)
 
-def style_fig(fig, height=None):
+def style_fig(fig, height=None, hovermode="closest"):
     """Deixa o gráfico legível tanto no tema claro quanto no escuro do Streamlit:
-    fundo transparente + grade/texto em cinza neutro (bom contraste nos dois temas)."""
+    fundo transparente + grade/texto em cinza neutro (bom contraste nos dois temas).
+    Também aplica camada de interatividade: hover unificado com tooltip estilizado,
+    spikes (crosshair) nos eixos e transições suaves de entrada/atualização."""
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#8a99ab", size=12),
-        legend=dict(font=dict(color="#8a99ab")),
+        font=dict(color="#8a99ab", size=12, family="'Segoe UI', Inter, -apple-system, sans-serif"),
+        legend=dict(font=dict(color="#8a99ab"), bgcolor="rgba(0,0,0,0)",
+                    orientation="h", y=-0.18, x=0.5, xanchor="center"),
         margin=dict(t=50, b=40, l=10, r=10),
+        hovermode=hovermode,
+        hoverlabel=dict(bgcolor=C_NAVY2, font_color="white", font_size=12.5,
+                         bordercolor=C_TEAL, font_family="'Segoe UI', sans-serif"),
+        hoverdistance=40,
+        transition=dict(duration=350, easing="cubic-in-out"),
+        uniformtext=dict(minsize=9, mode="hide"),
     )
-    fig.update_xaxes(gridcolor="rgba(140,150,160,.25)", zerolinecolor="rgba(140,150,160,.45)",
-                      linecolor="rgba(140,150,160,.4)")
-    fig.update_yaxes(gridcolor="rgba(140,150,160,.25)", zerolinecolor="rgba(140,150,160,.45)",
+    fig.update_xaxes(gridcolor="rgba(140,150,160,.22)", zerolinecolor="rgba(140,150,160,.45)",
+                      linecolor="rgba(140,150,160,.4)", showspikes=True, spikemode="across",
+                      spikesnap="cursor", spikethickness=1, spikecolor=CH_BLUE, spikedash="dot")
+    fig.update_yaxes(gridcolor="rgba(140,150,160,.22)", zerolinecolor="rgba(140,150,160,.45)",
                       linecolor="rgba(140,150,160,.4)")
     if height:
         fig.update_layout(height=height)
+    return fig
+
+def finish_hbar(fig, values, height=None):
+    """Para rankings horizontais com rótulo de valor 'outside': abre espaço extra no
+    eixo X e na margem direita para o texto não ser cortado pelo container."""
+    fig = style_fig(fig, height=height)
+    vmax = max(values) if len(values) else 0
+    fig.update_xaxes(range=[0, vmax * 1.24 if vmax else 1])
+    fig.update_layout(margin=dict(r=80))
     return fig
 
 # ---------------------------------------------------------------------------
@@ -630,397 +687,697 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
-# Indicadores Principais
-# ---------------------------------------------------------------------------
-st.markdown('<div class="section-title">💰 Indicadores Principais</div>', unsafe_allow_html=True)
-k1, k2, k3, k4, k5 = st.columns(5)
-k1.markdown(f"""<div class="kpi-card"><div class="kpi-label">Faturamento</div>
-    <div class="kpi-value">{fmt_r(receita_total)}</div>{delta_html(delta_receita)}</div>""", unsafe_allow_html=True)
-k2.markdown(f"""<div class="kpi-card"><div class="kpi-label">Custos Totais</div>
-    <div class="kpi-value">{fmt_r(custos_totais)}</div>{delta_html(delta_custos)}</div>""", unsafe_allow_html=True)
-k3.markdown(f"""<div class="kpi-card"><div class="kpi-label">Margem Contribuição</div>
-    <div class="kpi-value">{fmt_r(margem_contribuicao)}</div>{delta_html(delta_margem_c)}</div>""", unsafe_allow_html=True)
-k4.markdown(f"""<div class="kpi-card"><div class="kpi-label">Despesas</div>
-    <div class="kpi-value">{fmt_r(despesas_totais)}</div>{delta_html(delta_despesas)}</div>""", unsafe_allow_html=True)
-k5.markdown(f"""<div class="kpi-card"><div class="kpi-label">Resultado Operacional</div>
-    <div class="kpi-value">{fmt_r(resultado_operacional)}</div>{delta_html(delta_resultado)}</div>""", unsafe_allow_html=True)
 
-st.markdown(f"""<div class="legenda-box">
-<b>Faturamento</b>: receita bruta total (Direta + Portal MAAS) · <b>Custos Totais</b>: impostos + custo operacional + rebate AAI − co-corretagem ·
-<b>Margem de Contribuição</b>: faturamento − custos diretos · <b>Despesas</b>: despesas administrativas + folha/terceiros ·
-<b>Resultado Operacional</b>: margem de contribuição − despesas &nbsp;|&nbsp; Margem de lucro: {fmt_pct(margem_lucro)} · Status: <b>{status}</b>
-</div>""", unsafe_allow_html=True)
+tab_dash, tab_story = st.tabs(["📊 Dashboard", "📖 Storytelling"])
 
-# ---------------------------------------------------------------------------
-# Evolução Mensal
-# ---------------------------------------------------------------------------
-st.markdown('<div class="section-title">📈 Evolução Mensal</div>', unsafe_allow_html=True)
-crescimento = receita_mensal.pct_change() * 100
+with tab_dash:
+    # ---------------------------------------------------------------------------
+    # Indicadores Principais
+    # ---------------------------------------------------------------------------
+    st.markdown('<div class="section-title">💰 Indicadores Principais</div>', unsafe_allow_html=True)
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.markdown(f"""<div class="kpi-card"><div class="kpi-label">Faturamento</div>
+        <div class="kpi-value">{fmt_r(receita_total)}</div>{delta_html(delta_receita)}</div>""", unsafe_allow_html=True)
+    k2.markdown(f"""<div class="kpi-card"><div class="kpi-label">Custos Totais</div>
+        <div class="kpi-value">{fmt_r(custos_totais)}</div>{delta_html(delta_custos)}</div>""", unsafe_allow_html=True)
+    k3.markdown(f"""<div class="kpi-card"><div class="kpi-label">Margem Contribuição</div>
+        <div class="kpi-value">{fmt_r(margem_contribuicao)}</div>{delta_html(delta_margem_c)}</div>""", unsafe_allow_html=True)
+    k4.markdown(f"""<div class="kpi-card"><div class="kpi-label">Despesas</div>
+        <div class="kpi-value">{fmt_r(despesas_totais)}</div>{delta_html(delta_despesas)}</div>""", unsafe_allow_html=True)
+    k5.markdown(f"""<div class="kpi-card"><div class="kpi-label">Resultado Operacional</div>
+        <div class="kpi-value">{fmt_r(resultado_operacional)}</div>{delta_html(delta_resultado)}</div>""", unsafe_allow_html=True)
 
-fig_evol = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.08,
-                          subplot_titles=("Receita Bruta", "Crescimento (%)", "Resultado Operacional"))
-fig_evol.add_bar(x=combined.index, y=receita_mensal, name="Receita Bruta", marker_color=CH_BLUE, row=1, col=1,
-                  hovertemplate="R$ %{y:,.0f}<extra></extra>")
-fig_evol.add_trace(go.Scatter(x=combined.index, y=crescimento, mode="lines+markers", name="Crescimento %",
-                               line=dict(color=CH_GOLD, width=3), hovertemplate="%{y:.1f}%<extra></extra>"), row=2, col=1)
-fig_evol.add_hline(y=0, line_dash="dot", line_color="rgba(140,150,160,.6)", row=2, col=1)
-cores_resultado = [CH_SUCCESS if v >= 0 else CH_DANGER for v in combined["ResultadoOperacional"]]
-fig_evol.add_bar(x=combined.index, y=combined["ResultadoOperacional"], name="Resultado Operacional",
-                  marker_color=cores_resultado, row=3, col=1, hovertemplate="R$ %{y:,.0f}<extra></extra>")
-fig_evol.update_layout(showlegend=False)
-st.plotly_chart(style_fig(fig_evol, height=650), use_container_width=True, config=PLOTLY_CONFIG)
+    st.markdown(f"""<div class="legenda-box">
+    <b>Faturamento</b>: receita bruta total (Direta + Portal MAAS) · <b>Custos Totais</b>: impostos + custo operacional + rebate AAI − co-corretagem ·
+    <b>Margem de Contribuição</b>: faturamento − custos diretos · <b>Despesas</b>: despesas administrativas + folha/terceiros ·
+    <b>Resultado Operacional</b>: margem de contribuição − despesas &nbsp;|&nbsp; Margem de lucro: {fmt_pct(margem_lucro)} · Status: <b>{status}</b>
+    </div>""", unsafe_allow_html=True)
 
-tab_r = pd.DataFrame({"Mês": combined.index, "Receita Bruta": receita_mensal.values,
-                       "Crescimento": ["-"] + [f"{v:+.1f}%" for v in crescimento.values[1:]],
-                       "Resultado Operacional": combined["ResultadoOperacional"].values})
-st.dataframe(tab_r.style.format({"Receita Bruta": fmt_r, "Resultado Operacional": fmt_r}),
-             hide_index=True, use_container_width=True)
+    # ---------------------------------------------------------------------------
+    # Evolução Mensal
+    # ---------------------------------------------------------------------------
+    st.markdown('<div class="section-title">📈 Evolução Mensal</div>', unsafe_allow_html=True)
+    crescimento = receita_mensal.pct_change() * 100
 
-# ---------------------------------------------------------------------------
-# Ranking Seguradoras
-# ---------------------------------------------------------------------------
-st.markdown('<div class="section-title">🏢 Ranking — Seguradoras</div>', unsafe_allow_html=True)
-if combined_tx is not None and (combined_tx["Seguradora"] != "Não informado").any():
-    rank_seg = combined_tx.groupby("Seguradora")["Valor"].sum().sort_values(ascending=False).head(15)
-    fig_seg = px.bar(rank_seg[::-1], orientation="h", labels={"value": "R$", "Seguradora": ""},
-                      color=rank_seg[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
-    fig_seg.update_layout(showlegend=False, coloraxis_showscale=False)
-    fig_seg.update_traces(hovertemplate="R$ %{x:,.0f}<extra></extra>")
-    st.plotly_chart(style_fig(fig_seg), use_container_width=True, config=PLOTLY_CONFIG)
-else:
-    empty_state("🏢", "Coluna de Seguradora não encontrada na aba de receitas — ranking indisponível.")
+    fig_evol = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.09,
+                              subplot_titles=("Receita Bruta", "Crescimento (%)", "Resultado Operacional"))
+    fig_evol.add_bar(x=combined.index, y=receita_mensal, name="Receita Bruta", marker_color=CH_BLUE, row=1, col=1,
+                      marker_line_width=0, opacity=0.92,
+                      text=[fmt_r(v) for v in receita_mensal], textposition="outside", textfont=dict(size=10),
+                      hovertemplate="<b>%{x}</b><br>Receita Bruta: R$ %{y:,.0f}<extra></extra>")
+    # realce do melhor e do pior mês de receita, para leitura instantânea da tendência
+    best_i, worst_i = int(np.argmax(receita_mensal.values)), int(np.argmin(receita_mensal.values))
+    fig_evol.add_annotation(x=combined.index[best_i], y=receita_mensal.values[best_i], row=1, col=1,
+                             text="🏆 melhor mês", showarrow=True, arrowhead=2, arrowcolor=CH_SUCCESS,
+                             font=dict(color=CH_SUCCESS, size=10), ay=-28)
+    if worst_i != best_i:
+        fig_evol.add_annotation(x=combined.index[worst_i], y=receita_mensal.values[worst_i], row=1, col=1,
+                                 text="mín.", showarrow=True, arrowhead=2, arrowcolor=CH_DANGER_LIGHT,
+                                 font=dict(color=CH_DANGER, size=10), ay=24)
+    fig_evol.add_trace(go.Scatter(x=combined.index, y=crescimento, mode="lines+markers+text", name="Crescimento %",
+                                   line=dict(color=CH_GOLD, width=3, shape="spline", smoothing=0.4),
+                                   marker=dict(size=9, line=dict(width=2, color="rgba(10,22,40,.55)")),
+                                   text=[f"{v:+.0f}%" if pd.notna(v) else "" for v in crescimento],
+                                   textposition="top center", textfont=dict(size=9, color=CH_GOLD),
+                                   fill="tozeroy", fillcolor="rgba(254,202,87,.12)",
+                                   hovertemplate="<b>%{x}</b><br>Crescimento: %{y:.1f}%<extra></extra>"), row=2, col=1)
+    fig_evol.add_hline(y=0, line_dash="dot", line_color="rgba(140,150,160,.6)", row=2, col=1)
+    cores_resultado = [CH_SUCCESS if v >= 0 else CH_DANGER for v in combined["ResultadoOperacional"]]
+    fig_evol.add_bar(x=combined.index, y=combined["ResultadoOperacional"], name="Resultado Operacional",
+                      marker_color=cores_resultado, row=3, col=1, marker_line_width=0, opacity=0.92,
+                      text=[fmt_r(v) for v in combined["ResultadoOperacional"]], textposition="outside",
+                      textfont=dict(size=10),
+                      hovertemplate="<b>%{x}</b><br>Resultado Operacional: R$ %{y:,.0f}<extra></extra>")
+    fig_evol.add_hline(y=0, line_dash="dot", line_color="rgba(140,150,160,.6)", row=3, col=1)
+    fig_evol.update_layout(showlegend=False, bargap=0.35)
+    fig_evol.update_annotations(font_size=12)
+    st.plotly_chart(style_fig(fig_evol, height=680, hovermode="x unified"), use_container_width=True, config=PLOTLY_CONFIG)
 
-# ---------------------------------------------------------------------------
-# Distribuição de Resultados — Sócios
-# ---------------------------------------------------------------------------
-st.markdown('<div class="section-title">🤝 Distribuição de Resultados — Sócios</div>', unsafe_allow_html=True)
-socio_partner_total = combined["SocioPartner"].sum()
-socio_maldivas_total = combined["SocioMaldivas"].sum()
-denom = socio_partner_total + socio_maldivas_total
-partner_pct = (socio_partner_total / denom) if denom else partner_share
-maldivas_pct = 1 - partner_pct
+    tab_r = pd.DataFrame({"Mês": combined.index, "Receita Bruta": receita_mensal.values,
+                           "Crescimento": ["-"] + [f"{v:+.1f}%" for v in crescimento.values[1:]],
+                           "Resultado Operacional": combined["ResultadoOperacional"].values})
+    st.dataframe(tab_r.style.format({"Receita Bruta": fmt_r, "Resultado Operacional": fmt_r}),
+                 hide_index=True, use_container_width=True)
 
-s1, s2 = st.columns(2)
-s1.markdown(f"""<div class="socio-card" style="background:linear-gradient(135deg,{C_NAVY},{C_NAVY2});">
-<b>👔 Sócio Partner ({partner_pct:.0%})</b><h2 style="margin:6px 0;">{fmt_r(socio_partner_total)}</h2>
-<span style="font-size:12px;opacity:.9;">Participação majoritária no resultado</span></div>""", unsafe_allow_html=True)
-s2.markdown(f"""<div class="socio-card" style="background:linear-gradient(135deg,{C_TEAL},#0B4A63);">
-<b>🏝️ Sócio Maldivas ({maldivas_pct:.0%})</b><h2 style="margin:6px 0;">{fmt_r(socio_maldivas_total)}</h2>
-<span style="font-size:12px;opacity:.9;">Participação operacional</span></div>""", unsafe_allow_html=True)
+    # ---------------------------------------------------------------------------
+    # Ranking Seguradoras
+    # ---------------------------------------------------------------------------
+    st.markdown('<div class="section-title">🏢 Ranking — Seguradoras</div>', unsafe_allow_html=True)
+    if combined_tx is not None and (combined_tx["Seguradora"] != "Não informado").any():
+        rank_seg = combined_tx.groupby("Seguradora")["Valor"].sum().sort_values(ascending=False).head(15)
+        total_seg = combined_tx["Valor"].sum()
+        fig_seg = px.bar(rank_seg[::-1], orientation="h", labels={"value": "R$", "Seguradora": ""},
+                          color=rank_seg[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
+        fig_seg.update_layout(showlegend=False, coloraxis_showscale=False,
+                              height=max(320, 34 * len(rank_seg)))
+        fig_seg.update_traces(
+            marker_line_width=0,
+            text=[fmt_r(v) for v in rank_seg[::-1].values], textposition="outside", textfont=dict(size=10.5),
+            customdata=[v / total_seg if total_seg else 0 for v in rank_seg[::-1].values],
+            hovertemplate="<b>%{y}</b><br>R$ %{x:,.0f} · %{customdata:.1%} do total<extra></extra>")
+        st.plotly_chart(finish_hbar(fig_seg, rank_seg.values, height=max(320, 34 * len(rank_seg))),
+                         use_container_width=True, config=PLOTLY_CONFIG)
+    else:
+        empty_state("🏢", "Coluna de Seguradora não encontrada na aba de receitas — ranking indisponível.")
 
-fig_soc = go.Figure()
-fig_soc.add_bar(x=combined.index, y=combined["SocioPartner"], name="Sócio Partner", marker_color=CH_PURPLE)
-fig_soc.add_bar(x=combined.index, y=combined["SocioMaldivas"], name="Sócio Maldivas", marker_color=CH_BLUE)
-fig_soc.add_trace(go.Scatter(x=combined.index, y=combined["ResultadoOperacional"], name="Resultado Total",
-                              mode="lines+markers", line=dict(color=CH_GOLD, width=3)))
-fig_soc.add_hline(y=0, line_dash="dot", line_color="rgba(140,150,160,.6)")
-fig_soc.update_layout(barmode="group", legend=dict(orientation="h", y=-0.2))
-st.plotly_chart(style_fig(fig_soc), use_container_width=True, config=PLOTLY_CONFIG)
+    # ---------------------------------------------------------------------------
+    # Distribuição de Resultados — Sócios
+    # ---------------------------------------------------------------------------
+    st.markdown('<div class="section-title">🤝 Distribuição de Resultados — Sócios</div>', unsafe_allow_html=True)
+    socio_partner_total = combined["SocioPartner"].sum()
+    socio_maldivas_total = combined["SocioMaldivas"].sum()
+    denom = socio_partner_total + socio_maldivas_total
+    partner_pct = (socio_partner_total / denom) if denom else partner_share
+    maldivas_pct = 1 - partner_pct
 
-bg_total = "rgba(0,212,170,.14)" if resultado_operacional >= 0 else "rgba(255,107,107,.14)"
-color_total = "#00916e" if resultado_operacional >= 0 else "#d9364a"
-st.markdown(f"""<div class="total-box" style="background:{bg_total};color:{color_total};">
-Resultado total do período: {fmt_r(resultado_operacional)}</div>""", unsafe_allow_html=True)
+    s1, s2 = st.columns(2)
+    s1.markdown(f"""<div class="socio-card" style="background:linear-gradient(135deg,{C_NAVY},{C_NAVY2});">
+    <b>👔 Sócio Partner ({partner_pct:.0%})</b><h2 style="margin:6px 0;">{fmt_r(socio_partner_total)}</h2>
+    <span style="font-size:12px;opacity:.9;">Participação majoritária no resultado</span></div>""", unsafe_allow_html=True)
+    s2.markdown(f"""<div class="socio-card" style="background:linear-gradient(135deg,{C_TEAL},#0B4A63);">
+    <b>🏝️ Sócio Maldivas ({maldivas_pct:.0%})</b><h2 style="margin:6px 0;">{fmt_r(socio_maldivas_total)}</h2>
+    <span style="font-size:12px;opacity:.9;">Participação operacional</span></div>""", unsafe_allow_html=True)
 
-quarter_series = combined.groupby([QUARTER_OF[m] for m in combined.index])["ValorPagarMaldivas"].sum()
-quarter_series = quarter_series.reindex([q for q in quarters_available if q in
-                                          {QUARTER_OF[m] for m in combined.index}])
-if len(quarter_series):
-    st.markdown("**Valor a Receber (Maldivas) por Trimestre**")
-    qcols = st.columns(len(quarter_series))
-    for col, q in zip(qcols, quarter_series.index):
-        col.markdown(f"""<div class="kpi-card"><div class="kpi-label">{q}</div>
-        <div class="kpi-value" style="font-size:18px;">{fmt_r(quarter_series[q])}</div></div>""", unsafe_allow_html=True)
+    fig_soc = go.Figure()
+    fig_soc.add_bar(x=combined.index, y=combined["SocioPartner"], name="Sócio Partner", marker_color=CH_PURPLE,
+                     marker_line_width=0, opacity=0.92,
+                     hovertemplate="<b>%{x}</b><br>Sócio Partner: R$ %{y:,.0f}<extra></extra>")
+    fig_soc.add_bar(x=combined.index, y=combined["SocioMaldivas"], name="Sócio Maldivas", marker_color=CH_BLUE,
+                     marker_line_width=0, opacity=0.92,
+                     hovertemplate="<b>%{x}</b><br>Sócio Maldivas: R$ %{y:,.0f}<extra></extra>")
+    fig_soc.add_trace(go.Scatter(x=combined.index, y=combined["ResultadoOperacional"], name="Resultado Total",
+                                  mode="lines+markers", line=dict(color=CH_GOLD, width=3, shape="spline", smoothing=0.4),
+                                  marker=dict(size=9, line=dict(width=2, color="rgba(10,22,40,.55)")),
+                                  hovertemplate="<b>%{x}</b><br>Resultado Total: R$ %{y:,.0f}<extra></extra>"))
+    fig_soc.add_hline(y=0, line_dash="dot", line_color="rgba(140,150,160,.6)")
+    fig_soc.update_layout(barmode="group", bargap=0.25, bargroupgap=0.08,
+                           legend=dict(orientation="h", y=-0.2))
+    st.plotly_chart(style_fig(fig_soc, height=420, hovermode="x unified"), use_container_width=True, config=PLOTLY_CONFIG)
 
-# ---------------------------------------------------------------------------
-# Análise por Produto
-# ---------------------------------------------------------------------------
-st.markdown('<div class="section-title">🧩 Análise por Produto</div>', unsafe_allow_html=True)
-if combined_tx is not None and (combined_tx["Produto"] != "Não informado").any():
-    p1, p2 = st.columns([1, 1])
-    with p1:
-        fig_sun = px.sunburst(combined_tx, path=["Seguradora", "Produto"], values="Valor",
-                               color_discrete_sequence=CH_QUALITATIVE)
-        fig_sun.update_traces(hovertemplate="%{label}<br>R$ %{value:,.0f}<extra></extra>")
-        st.plotly_chart(style_fig(fig_sun), use_container_width=True, config=PLOTLY_CONFIG)
-    with p2:
-        rank_prod = combined_tx.groupby("Produto")["Valor"].sum().sort_values(ascending=False).head(15)
-        fig_prod = px.bar(rank_prod[::-1], orientation="h", labels={"value": "R$", "Produto": ""},
-                           color=rank_prod[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
-        fig_prod.update_layout(showlegend=False, coloraxis_showscale=False)
-        fig_prod.update_traces(hovertemplate="R$ %{x:,.0f}<extra></extra>")
-        st.plotly_chart(style_fig(fig_prod), use_container_width=True, config=PLOTLY_CONFIG)
-else:
-    empty_state("🧩", "Coluna de Produto não encontrada na aba de receitas — análise indisponível.")
+    bg_total = "rgba(0,212,170,.14)" if resultado_operacional >= 0 else "rgba(255,107,107,.14)"
+    color_total = "#00916e" if resultado_operacional >= 0 else "#d9364a"
+    st.markdown(f"""<div class="total-box" style="background:{bg_total};color:{color_total};">
+    Resultado total do período: {fmt_r(resultado_operacional)}</div>""", unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
-# Ranking Originadores
-# ---------------------------------------------------------------------------
-st.markdown('<div class="section-title">👥 Ranking — Originadores</div>', unsafe_allow_html=True)
-ranking_df = None
-if combined_tx is not None and (combined_tx["Originador"] != "Não informado").any():
-    ranking_full = (combined_tx.groupby("Originador")
-                     .agg(Valor=("Valor", "sum"), Operacoes=("Valor", "count"))
-                     .assign(TicketMedio=lambda d: d["Valor"] / d["Operacoes"])
-                     .sort_values("Valor", ascending=False))
-    ranking_df = ranking_full.head(3).reset_index()
-    o1, o2 = st.columns([1, 1])
-    with o1:
-        top_n = ranking_full.head(5)
-        outros = ranking_full["Valor"].iloc[5:].sum()
-        labels = list(top_n.index) + (["Outros"] if outros > 0 else [])
-        values = list(top_n["Valor"]) + ([outros] if outros > 0 else [])
-        fig_don = go.Figure(go.Pie(labels=labels, values=values, hole=.55,
-                                    marker_colors=CH_QUALITATIVE,
-                                    hovertemplate="%{label}: R$ %{value:,.0f}<extra></extra>"))
-        fig_don.update_layout(title="Participação por Originador")
-        st.plotly_chart(style_fig(fig_don), use_container_width=True, config=PLOTLY_CONFIG)
-    with o2:
-        medals, colors_m = ["🥇", "🥈", "🥉"], [C_GOLD_MEDAL, C_SILVER, C_BRONZE]
-        for i, row in ranking_df.iterrows():
-            st.markdown(f"""<div class="rank-card" style="border-left:6px solid {colors_m[i]};">
-            <div class="rank-medal">{medals[i]}</div>
-            <div><b>{row['Originador']}</b><br>
-            <span style="font-size:20px;font-weight:800;color:{C_NAVY2};">{fmt_r(row['Valor'])}</span><br>
-            <span style="font-size:12px;color:#8c8c8c;">{int(row['Operacoes'])} operações | Ticket médio: {fmt_r(row['TicketMedio'])}</span>
-            </div></div>""", unsafe_allow_html=True)
-else:
-    empty_state("👥", "Coluna de Originador não encontrada — ranking indisponível.")
+    quarter_series = combined.groupby([QUARTER_OF[m] for m in combined.index])["ValorPagarMaldivas"].sum()
+    quarter_series = quarter_series.reindex([q for q in quarters_available if q in
+                                              {QUARTER_OF[m] for m in combined.index}])
+    if len(quarter_series):
+        st.markdown("**Valor a Receber (Maldivas) por Trimestre**")
+        qcols = st.columns(len(quarter_series))
+        for col, q in zip(qcols, quarter_series.index):
+            col.markdown(f"""<div class="kpi-card"><div class="kpi-label">{q}</div>
+            <div class="kpi-value" style="font-size:18px;">{fmt_r(quarter_series[q])}</div></div>""", unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
-# Ranking Clientes
-# ---------------------------------------------------------------------------
-st.markdown('<div class="section-title">🧑‍💼 Ranking — Clientes</div>', unsafe_allow_html=True)
-if combined_tx is not None and (combined_tx["Cliente"] != "Não informado").any():
-    rank_cli = combined_tx.groupby("Cliente")["Valor"].sum().sort_values(ascending=False).head(15)
-    fig_cli = px.bar(rank_cli[::-1], orientation="h", labels={"value": "R$", "Cliente": ""},
-                      color=rank_cli[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
-    fig_cli.update_layout(showlegend=False, coloraxis_showscale=False)
-    fig_cli.update_traces(hovertemplate="R$ %{x:,.0f}<extra></extra>")
-    st.plotly_chart(style_fig(fig_cli), use_container_width=True, config=PLOTLY_CONFIG)
-else:
-    empty_state("🧑‍💼", "Coluna de Cliente não encontrada na aba de receitas — ranking indisponível.")
+    # ---------------------------------------------------------------------------
+    # Análise por Produto
+    # ---------------------------------------------------------------------------
+    st.markdown('<div class="section-title">🧩 Análise por Produto</div>', unsafe_allow_html=True)
+    if combined_tx is not None and (combined_tx["Produto"] != "Não informado").any():
+        p1, p2 = st.columns([1, 1])
+        with p1:
+            fig_sun = px.sunburst(combined_tx, path=["Seguradora", "Produto"], values="Valor",
+                                   color_discrete_sequence=CH_QUALITATIVE)
+            fig_sun.update_traces(hovertemplate="<b>%{label}</b><br>R$ %{value:,.0f} · %{percentParent:.1%} do ramo<extra></extra>",
+                                   textinfo="label+percent parent", insidetextorientation="radial",
+                                   marker=dict(line=dict(color="rgba(255,255,255,.35)", width=1.5)))
+            fig_sun.update_layout(height=440)
+            st.plotly_chart(style_fig(fig_sun), use_container_width=True, config=PLOTLY_CONFIG)
+        with p2:
+            rank_prod = combined_tx.groupby("Produto")["Valor"].sum().sort_values(ascending=False).head(15)
+            total_prod = combined_tx["Valor"].sum()
+            fig_prod = px.bar(rank_prod[::-1], orientation="h", labels={"value": "R$", "Produto": ""},
+                               color=rank_prod[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
+            fig_prod.update_layout(showlegend=False, coloraxis_showscale=False, height=440)
+            fig_prod.update_traces(
+                marker_line_width=0,
+                text=[fmt_r(v) for v in rank_prod[::-1].values], textposition="outside", textfont=dict(size=10.5),
+                customdata=[v / total_prod if total_prod else 0 for v in rank_prod[::-1].values],
+                hovertemplate="<b>%{y}</b><br>R$ %{x:,.0f} · %{customdata:.1%} do total<extra></extra>")
+            st.plotly_chart(finish_hbar(fig_prod, rank_prod.values, height=440),
+                             use_container_width=True, config=PLOTLY_CONFIG)
+    else:
+        empty_state("🧩", "Coluna de Produto não encontrada na aba de receitas — análise indisponível.")
 
-# ---------------------------------------------------------------------------
-# Ranking Despesas
-# ---------------------------------------------------------------------------
-st.markdown('<div class="section-title">💸 Ranking — Despesas por Categoria</div>', unsafe_allow_html=True)
-if combined_desp is not None:
-    rank_desp = combined_desp.groupby("Categoria")["Valor"].sum().sort_values(ascending=False).head(10)
-    fig_desp = px.bar(rank_desp[::-1], orientation="h", labels={"value": "R$", "Categoria": ""},
-                       color=rank_desp[::-1].values, color_continuous_scale=[CH_DANGER_LIGHT, CH_DANGER])
-    fig_desp.update_layout(showlegend=False, coloraxis_showscale=False)
-    fig_desp.update_traces(hovertemplate="R$ %{x:,.0f}<extra></extra>")
-    st.plotly_chart(style_fig(fig_desp), use_container_width=True, config=PLOTLY_CONFIG)
-else:
-    empty_state("💸", "Aba 'DESPESAS' não encontrada (ou sem colunas Categoria/Valor) — ranking indisponível.")
+    # ---------------------------------------------------------------------------
+    # Ranking Originadores
+    # ---------------------------------------------------------------------------
+    st.markdown('<div class="section-title">👥 Ranking — Originadores</div>', unsafe_allow_html=True)
+    ranking_df = None
+    if combined_tx is not None and (combined_tx["Originador"] != "Não informado").any():
+        ranking_full = (combined_tx.groupby("Originador")
+                         .agg(Valor=("Valor", "sum"), Operacoes=("Valor", "count"))
+                         .assign(TicketMedio=lambda d: d["Valor"] / d["Operacoes"])
+                         .sort_values("Valor", ascending=False))
+        ranking_df = ranking_full.head(3).reset_index()
+        o1, o2 = st.columns([1, 1])
+        with o1:
+            top_n = ranking_full.head(5)
+            outros = ranking_full["Valor"].iloc[5:].sum()
+            labels = list(top_n.index) + (["Outros"] if outros > 0 else [])
+            values = list(top_n["Valor"]) + ([outros] if outros > 0 else [])
+            pulls = [0.06] + [0] * (len(labels) - 1)
+            fig_don = go.Figure(go.Pie(
+                labels=labels, values=values, hole=.62, pull=pulls, sort=False,
+                marker=dict(colors=CH_QUALITATIVE, line=dict(color="rgba(255,255,255,.4)", width=2)),
+                textinfo="percent", textfont=dict(size=12, color="white"),
+                hovertemplate="<b>%{label}</b><br>R$ %{value:,.0f} · %{percent}<extra></extra>"))
+            fig_don.add_annotation(text=f"<b>{fmt_r(sum(values))}</b><br><span style='font-size:11px;'>total</span>",
+                                    showarrow=False, font=dict(size=15, color="#8a99ab"))
+            fig_don.update_layout(title="Participação por Originador")
+            st.plotly_chart(style_fig(fig_don, height=420), use_container_width=True, config=PLOTLY_CONFIG)
+        with o2:
+            medals, colors_m = ["🥇", "🥈", "🥉"], [C_GOLD_MEDAL, C_SILVER, C_BRONZE]
+            for i, row in ranking_df.iterrows():
+                st.markdown(f"""<div class="rank-card" style="border-left:6px solid {colors_m[i]};">
+                <div class="rank-medal">{medals[i]}</div>
+                <div><b>{row['Originador']}</b><br>
+                <span style="font-size:20px;font-weight:800;color:{C_NAVY2};">{fmt_r(row['Valor'])}</span><br>
+                <span style="font-size:12px;color:#8c8c8c;">{int(row['Operacoes'])} operações | Ticket médio: {fmt_r(row['TicketMedio'])}</span>
+                </div></div>""", unsafe_allow_html=True)
+    else:
+        empty_state("👥", "Coluna de Originador não encontrada — ranking indisponível.")
 
-# ---------------------------------------------------------------------------
-# Resumo Executivo
-# ---------------------------------------------------------------------------
-resumo_linhas = [
-    ("FATURAMENTO BRUTO", receita_total, True),
-    ("Produção Direta", combined["ReceitaDireta"].sum(), False),
-    ("Portal MAAS", combined["ReceitaPortal"].sum(), False),
-    ("Impostos Diretos", combined["Impostos"].sum(), False),
-    ("Custo Operacional (D.A)", combined["Custo"].sum(), False),
-    ("Co-Corretagem", combined["CoCorretagem"].sum(), False),
-    ("Rebate AAI", combined["RebateAAI"].sum(), False),
-    ("CUSTOS TOTAIS", custos_totais, True),
-    ("(=) MARGEM DE CONTRIBUIÇÃO", margem_contribuicao, True),
-    ("DESPESAS TOTAIS", despesas_totais, True),
-    ("Folha + Terceiros", combined["Folha"].sum(), False),
-    ("RESULTADO OPERACIONAL", resultado_operacional, True),
-]
-st.markdown('<div class="section-title">📋 Resumo Executivo</div>', unsafe_allow_html=True)
-resumo_html = "<table style='width:100%;border-collapse:collapse;'>"
-for label, val, bold in resumo_linhas:
-    w = "700" if bold else "400"
-    bg = "#e8f0fe" if bold else "#ffffff"
-    resumo_html += f"""<tr style="background:{bg};">
-    <td style="padding:9px 12px;font-weight:{w};color:{C_TEXT_DARK};border-bottom:1px solid #eee;">{label}</td>
-    <td style="padding:9px 12px;text-align:right;font-weight:{w};color:{C_TEXT_DARK};border-bottom:1px solid #eee;">{fmt_r(val)}</td></tr>"""
-resumo_html += "</table>"
-st.markdown(resumo_html, unsafe_allow_html=True)
+    # ---------------------------------------------------------------------------
+    # Ranking Clientes
+    # ---------------------------------------------------------------------------
+    st.markdown('<div class="section-title">🧑‍💼 Ranking — Clientes</div>', unsafe_allow_html=True)
+    if combined_tx is not None and (combined_tx["Cliente"] != "Não informado").any():
+        rank_cli = combined_tx.groupby("Cliente")["Valor"].sum().sort_values(ascending=False).head(15)
+        total_cli = combined_tx["Valor"].sum()
+        fig_cli = px.bar(rank_cli[::-1], orientation="h", labels={"value": "R$", "Cliente": ""},
+                          color=rank_cli[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
+        fig_cli.update_layout(showlegend=False, coloraxis_showscale=False,
+                              height=max(320, 34 * len(rank_cli)))
+        fig_cli.update_traces(
+            marker_line_width=0,
+            text=[fmt_r(v) for v in rank_cli[::-1].values], textposition="outside", textfont=dict(size=10.5),
+            customdata=[v / total_cli if total_cli else 0 for v in rank_cli[::-1].values],
+            hovertemplate="<b>%{y}</b><br>R$ %{x:,.0f} · %{customdata:.1%} do total<extra></extra>")
+        st.plotly_chart(finish_hbar(fig_cli, rank_cli.values, height=max(320, 34 * len(rank_cli))),
+                         use_container_width=True, config=PLOTLY_CONFIG)
+    else:
+        empty_state("🧑‍💼", "Coluna de Cliente não encontrada na aba de receitas — ranking indisponível.")
 
-# ---------------------------------------------------------------------------
-# PDF — ReportLab
-# ---------------------------------------------------------------------------
-def build_pdf():
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=1.2 * cm, bottomMargin=1.6 * cm,
-                             leftMargin=1.5 * cm, rightMargin=1.5 * cm)
-    styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle("CoverTitle", fontSize=26, textColor=colors.white, fontName="Helvetica-Bold",
-                               alignment=TA_CENTER, leading=30))
-    styles.add(ParagraphStyle("CoverSub", fontSize=13, textColor=colors.white, fontName="Helvetica",
-                               alignment=TA_CENTER, leading=18))
-    styles.add(ParagraphStyle("SectionTitle", fontSize=15, textColor=HexColor(C_NAVY2), fontName="Helvetica-Bold",
-                               spaceBefore=14, spaceAfter=8))
-    styles.add(ParagraphStyle("Body", fontSize=10, textColor=HexColor(C_TEXT_DARK), fontName="Helvetica", leading=14))
+    # ---------------------------------------------------------------------------
+    # Ranking Despesas
+    # ---------------------------------------------------------------------------
+    st.markdown('<div class="section-title">💸 Ranking — Despesas por Categoria</div>', unsafe_allow_html=True)
+    if combined_desp is not None:
+        rank_desp = combined_desp.groupby("Categoria")["Valor"].sum().sort_values(ascending=False).head(10)
+        total_desp = combined_desp["Valor"].sum()
+        fig_desp = px.bar(rank_desp[::-1], orientation="h", labels={"value": "R$", "Categoria": ""},
+                           color=rank_desp[::-1].values, color_continuous_scale=[CH_DANGER_LIGHT, CH_DANGER])
+        fig_desp.update_layout(showlegend=False, coloraxis_showscale=False,
+                               height=max(320, 34 * len(rank_desp)))
+        fig_desp.update_traces(
+            marker_line_width=0,
+            text=[fmt_r(v) for v in rank_desp[::-1].values], textposition="outside", textfont=dict(size=10.5),
+            customdata=[v / total_desp if total_desp else 0 for v in rank_desp[::-1].values],
+            hovertemplate="<b>%{y}</b><br>R$ %{x:,.0f} · %{customdata:.1%} do total<extra></extra>")
+        st.plotly_chart(finish_hbar(fig_desp, rank_desp.values, height=max(320, 34 * len(rank_desp))),
+                         use_container_width=True, config=PLOTLY_CONFIG)
+    else:
+        empty_state("💸", "Aba 'DESPESAS' não encontrada (ou sem colunas Categoria/Valor) — ranking indisponível.")
 
-    story = []
-
-    cover_content = [
-        Spacer(1, 3 * cm),
-        Paragraph("Dashboard Financeiro Premium", styles["CoverTitle"]),
-        Spacer(1, 0.5 * cm),
-        Paragraph(" + ".join(selected_files), styles["CoverSub"]),
-        Paragraph(f"Período analisado: {periodo_label}", styles["CoverSub"]),
-        Paragraph(f"Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')}", styles["CoverSub"]),
-        Spacer(1, 3 * cm),
+    # ---------------------------------------------------------------------------
+    # Resumo Executivo
+    # ---------------------------------------------------------------------------
+    resumo_linhas = [
+        ("FATURAMENTO BRUTO", receita_total, True),
+        ("Produção Direta", combined["ReceitaDireta"].sum(), False),
+        ("Portal MAAS", combined["ReceitaPortal"].sum(), False),
+        ("Impostos Diretos", combined["Impostos"].sum(), False),
+        ("Custo Operacional (D.A)", combined["Custo"].sum(), False),
+        ("Co-Corretagem", combined["CoCorretagem"].sum(), False),
+        ("Rebate AAI", combined["RebateAAI"].sum(), False),
+        ("CUSTOS TOTAIS", custos_totais, True),
+        ("(=) MARGEM DE CONTRIBUIÇÃO", margem_contribuicao, True),
+        ("DESPESAS TOTAIS", despesas_totais, True),
+        ("Folha + Terceiros", combined["Folha"].sum(), False),
+        ("RESULTADO OPERACIONAL", resultado_operacional, True),
     ]
-    cover_table = Table([[c] for c in cover_content], colWidths=[17 * cm])
-    cover_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), HexColor(C_NAVY)),
-                                       ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
-    story.append(cover_table)
-    story.append(PageBreak())
+    st.markdown('<div class="section-title">📋 Resumo Executivo</div>', unsafe_allow_html=True)
+    resumo_html = "<table style='width:100%;border-collapse:collapse;'>"
+    for label, val, bold in resumo_linhas:
+        w = "700" if bold else "400"
+        bg = "#e8f0fe" if bold else "#ffffff"
+        resumo_html += f"""<tr style="background:{bg};">
+        <td style="padding:9px 12px;font-weight:{w};color:{C_TEXT_DARK};border-bottom:1px solid #eee;">{label}</td>
+        <td style="padding:9px 12px;text-align:right;font-weight:{w};color:{C_TEXT_DARK};border-bottom:1px solid #eee;">{fmt_r(val)}</td></tr>"""
+    resumo_html += "</table>"
+    st.markdown(resumo_html, unsafe_allow_html=True)
 
-    story.append(Paragraph("Sumário", styles["SectionTitle"]))
-    secoes = ["Indicadores Principais", "Evolução Mensal", "Ranking de Seguradoras",
-              "Distribuição de Resultados (Sócios)", "Ranking de Originadores", "Ranking de Clientes",
-              "Ranking de Despesas", "Resumo Executivo"]
-    for i, s in enumerate(secoes, 1):
-        story.append(Paragraph(f"{i}. {s}", styles["Body"]))
-    story.append(Spacer(1, 0.6 * cm))
+    # ---------------------------------------------------------------------------
+    # PDF — ReportLab
+    # ---------------------------------------------------------------------------
+    def build_pdf():
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=1.2 * cm, bottomMargin=1.6 * cm,
+                                 leftMargin=1.5 * cm, rightMargin=1.5 * cm)
+        styles = getSampleStyleSheet()
+        styles.add(ParagraphStyle("CoverTitle", fontSize=26, textColor=colors.white, fontName="Helvetica-Bold",
+                                   alignment=TA_CENTER, leading=30))
+        styles.add(ParagraphStyle("CoverSub", fontSize=13, textColor=colors.white, fontName="Helvetica",
+                                   alignment=TA_CENTER, leading=18))
+        styles.add(ParagraphStyle("SectionTitle", fontSize=15, textColor=HexColor(C_NAVY2), fontName="Helvetica-Bold",
+                                   spaceBefore=10, spaceAfter=5, keepWithNext=1))
+        styles.add(ParagraphStyle("Body", fontSize=10, textColor=HexColor(C_TEXT_DARK), fontName="Helvetica", leading=14))
 
-    story.append(Paragraph("Indicadores Principais", styles["SectionTitle"]))
-    kpi_data = [["Faturamento", "Custos Totais", "Margem Contribuição", "Despesas", "Resultado Operacional"],
-                [fmt_r(receita_total), fmt_r(custos_totais), fmt_r(margem_contribuicao),
-                 fmt_r(despesas_totais), fmt_r(resultado_operacional)]]
-    kpi_table = Table(kpi_data, colWidths=[3.4 * cm] * 5)
-    kpi_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("BACKGROUND", (0, 1), (-1, 1), HexColor("#e8f0fe")),
-        ("TEXTCOLOR", (0, 1), (-1, 1), HexColor(C_TEXT_DARK)),
-        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
-        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ]))
-    story.append(kpi_table)
-    story.append(Paragraph(f"Margem de lucro: {fmt_pct(margem_lucro)} · Status: {status}", styles["Body"]))
-    story.append(Spacer(1, 0.4 * cm))
+        story = []
 
-    story.append(Paragraph("Evolução Mensal", styles["SectionTitle"]))
-    drawing = Drawing(420, 180)
-    lc = HorizontalLineChart()
-    lc.x, lc.y, lc.width, lc.height = 40, 20, 360, 140
-    lc.data = [list(receita_mensal.values), list(combined["ResultadoOperacional"].values)]
-    lc.categoryAxis.categoryNames = list(combined.index)
-    lc.lines[0].strokeColor = HexColor(C_TEAL)
-    lc.lines[1].strokeColor = HexColor(CH_SUCCESS)
-    lc.lines[0].strokeWidth = 2
-    lc.lines[1].strokeWidth = 2
-    drawing.add(lc)
-    story.append(drawing)
-    story.append(Paragraph("Azul: Receita Bruta · Verde: Resultado Operacional", styles["Body"]))
+        # A capa usa um retângulo de fundo desenhado direto no canvas (ver draw_cover_bg
+        # em onFirstPage) em vez de uma Table dimensionada pelo conteúdo — isso garante que
+        # a cor cubra a página inteira, sem a grande faixa branca que sobrava abaixo dela.
+        story.append(Spacer(1, 9.5 * cm))
+        story.append(Paragraph("Dashboard Financeiro Premium", styles["CoverTitle"]))
+        story.append(Spacer(1, 0.5 * cm))
+        story.append(Paragraph(" + ".join(selected_files), styles["CoverSub"]))
+        story.append(Paragraph(f"Período analisado: {periodo_label}", styles["CoverSub"]))
+        story.append(Paragraph(f"Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')}", styles["CoverSub"]))
+        story.append(PageBreak())
 
-    mensal_rows = [["Mês", "Receita Bruta", "Resultado Operacional"]]
-    for m in combined.index:
-        mensal_rows.append([m, fmt_r(receita_mensal[m]), fmt_r(combined["ResultadoOperacional"][m])])
-    t_mensal = Table(mensal_rows, colWidths=[3 * cm, 6 * cm, 6 * cm])
-    t_mensal.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("TEXTCOLOR", (0, 1), (-1, -1), HexColor(C_TEXT_DARK)),
-        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"), ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")), ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
-    ]))
-    story.append(Spacer(1, 0.3 * cm))
-    story.append(t_mensal)
+        story.append(Paragraph("Sumário", styles["SectionTitle"]))
+        secoes = ["Indicadores Principais", "Evolução Mensal", "Ranking de Seguradoras",
+                  "Distribuição de Resultados (Sócios)", "Ranking de Originadores", "Ranking de Clientes",
+                  "Ranking de Despesas", "Resumo Executivo"]
+        for i, s in enumerate(secoes, 1):
+            story.append(Paragraph(f"{i}. {s}", styles["Body"]))
+        story.append(Spacer(1, 0.3 * cm))
 
-    def add_ranking_table(title, df_or_series, value_label="Valor"):
-        story.append(Paragraph(title, styles["SectionTitle"]))
-        if df_or_series is None or len(df_or_series) == 0:
-            story.append(Paragraph("Dados não disponíveis nesta planilha.", styles["Body"]))
-            return
-        rows = [[df_or_series.index.name or "Item", value_label]]
-        for idx, val in df_or_series.items():
-            rows.append([str(idx), fmt_r(val)])
-        t = Table(rows, colWidths=[10 * cm, 5 * cm])
-        t.setStyle(TableStyle([
+        story.append(Paragraph("Indicadores Principais", styles["SectionTitle"]))
+        kpi_data = [["Faturamento", "Custos Totais", "Margem Contribuição", "Despesas", "Resultado Operacional"],
+                    [fmt_r(receita_total), fmt_r(custos_totais), fmt_r(margem_contribuicao),
+                     fmt_r(despesas_totais), fmt_r(resultado_operacional)]]
+        kpi_table = Table(kpi_data, colWidths=[3.4 * cm] * 5)
+        kpi_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("BACKGROUND", (0, 1), (-1, 1), HexColor("#e8f0fe")),
+            ("TEXTCOLOR", (0, 1), (-1, 1), HexColor(C_TEXT_DARK)),
+            ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(kpi_table)
+        story.append(Paragraph(f"Margem de lucro: {fmt_pct(margem_lucro)} · Status: {status}", styles["Body"]))
+        story.append(Spacer(1, 0.2 * cm))
+
+        story.append(Paragraph("Evolução Mensal", styles["SectionTitle"]))
+        drawing = Drawing(420, 155)
+        lc = HorizontalLineChart()
+        lc.x, lc.y, lc.width, lc.height = 40, 15, 360, 120
+        lc.data = [list(receita_mensal.values), list(combined["ResultadoOperacional"].values)]
+        lc.categoryAxis.categoryNames = list(combined.index)
+        lc.lines[0].strokeColor = HexColor(C_TEAL)
+        lc.lines[1].strokeColor = HexColor(CH_SUCCESS)
+        lc.lines[0].strokeWidth = 2
+        lc.lines[1].strokeWidth = 2
+        drawing.add(lc)
+        story.append(drawing)
+        story.append(Paragraph("Azul: Receita Bruta · Verde: Resultado Operacional", styles["Body"]))
+
+        mensal_rows = [["Mês", "Receita Bruta", "Resultado Operacional"]]
+        for m in combined.index:
+            mensal_rows.append([m, fmt_r(receita_mensal[m]), fmt_r(combined["ResultadoOperacional"][m])])
+        t_mensal = Table(mensal_rows, colWidths=[3 * cm, 6 * cm, 6 * cm])
+        t_mensal.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("TEXTCOLOR", (0, 1), (-1, -1), HexColor(C_TEXT_DARK)),
             ("FONTNAME", (0, 0), (-1, -1), "Helvetica"), ("FONTSIZE", (0, 0), (-1, -1), 9),
             ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")), ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ]))
-        story.append(t)
+        story.append(Spacer(1, 0.2 * cm))
+        story.append(t_mensal)
 
-    story.append(PageBreak())
-    if combined_tx is not None and (combined_tx["Seguradora"] != "Não informado").any():
-        add_ranking_table("Ranking — Seguradoras (Top 15)",
-                           combined_tx.groupby("Seguradora")["Valor"].sum().sort_values(ascending=False).head(15))
+        def add_ranking_table(title, df_or_series, value_label="Valor"):
+            story.append(Paragraph(title, styles["SectionTitle"]))
+            if df_or_series is None or len(df_or_series) == 0:
+                story.append(Paragraph("Dados não disponíveis nesta planilha.", styles["Body"]))
+                return
+            rows = [[df_or_series.index.name or "Item", value_label]]
+            for idx, val in df_or_series.items():
+                rows.append([str(idx), fmt_r(val)])
+            t = Table(rows, colWidths=[10 * cm, 5 * cm])
+            t.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("TEXTCOLOR", (0, 1), (-1, -1), HexColor(C_TEXT_DARK)),
+                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"), ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")), ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]))
+            story.append(t)
+
+        story.append(Spacer(1, 0.3 * cm))
+        if combined_tx is not None and (combined_tx["Seguradora"] != "Não informado").any():
+            add_ranking_table("Ranking — Seguradoras (Top 15)",
+                               combined_tx.groupby("Seguradora")["Valor"].sum().sort_values(ascending=False).head(15))
+        else:
+            add_ranking_table("Ranking — Seguradoras", None)
+
+        story.append(Spacer(1, 0.25 * cm))
+        story.append(Paragraph("Distribuição de Resultados — Sócios", styles["SectionTitle"]))
+        socio_rows = [["Sócio", "Participação", "Valor"],
+                      ["Partner", f"{partner_pct:.0%}", fmt_r(socio_partner_total)],
+                      ["Maldivas", f"{maldivas_pct:.0%}", fmt_r(socio_maldivas_total)]]
+        t_socio = Table(socio_rows, colWidths=[5 * cm, 4 * cm, 6 * cm])
+        t_socio.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("TEXTCOLOR", (0, 1), (-1, -1), HexColor(C_TEXT_DARK)),
+            ("FONTNAME", (0, 0), (-1, -1), "Helvetica"), ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")), ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(t_socio)
+
+        story.append(Spacer(1, 0.3 * cm))
+        if ranking_df is not None:
+            add_ranking_table("Ranking — Originadores (Top 3)", ranking_df.set_index("Originador")["Valor"])
+        else:
+            add_ranking_table("Ranking — Originadores", None)
+
+        story.append(Spacer(1, 0.25 * cm))
+        if combined_tx is not None and (combined_tx["Cliente"] != "Não informado").any():
+            add_ranking_table("Ranking — Clientes (Top 15)",
+                               combined_tx.groupby("Cliente")["Valor"].sum().sort_values(ascending=False).head(15))
+        else:
+            add_ranking_table("Ranking — Clientes", None)
+
+        story.append(Spacer(1, 0.25 * cm))
+        if combined_desp is not None:
+            add_ranking_table("Ranking — Despesas (Top 10)",
+                               combined_desp.groupby("Categoria")["Valor"].sum().sort_values(ascending=False).head(10))
+        else:
+            add_ranking_table("Ranking — Despesas", None)
+
+        story.append(Spacer(1, 0.3 * cm))
+        story.append(Paragraph("Resumo Executivo", styles["SectionTitle"]))
+        resumo_rows = [["Indicador", "Valor"]] + [[label, fmt_r(val)] for label, val, _ in resumo_linhas]
+        t_resumo = Table(resumo_rows, colWidths=[11 * cm, 5 * cm])
+        bold_rows = [i for i, (_, _, bold) in enumerate(resumo_linhas, start=1) if bold]
+        style_cmds = [
+            ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("TEXTCOLOR", (0, 1), (-1, -1), HexColor(C_TEXT_DARK)),
+            ("FONTNAME", (0, 0), (-1, -1), "Helvetica"), ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")), ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]
+        for r in bold_rows:
+            style_cmds.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
+            style_cmds.append(("BACKGROUND", (0, r), (-1, r), HexColor("#e8f0fe")))
+        t_resumo.setStyle(TableStyle(style_cmds))
+        story.append(t_resumo)
+
+        def add_page_number(canvas, doc_):
+            canvas.saveState()
+            canvas.setFont("Helvetica", 8)
+            canvas.setFillColor(HexColor("#888888"))
+            canvas.drawCentredString(A4[0] / 2, 1.0 * cm, f"Página {doc_.page} — Dashboard Financeiro Premium")
+            canvas.restoreState()
+
+        def draw_cover_page(canvas, doc_):
+            canvas.saveState()
+            canvas.setFillColor(HexColor(C_NAVY))
+            canvas.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
+            canvas.setFont("Helvetica", 8)
+            canvas.setFillColor(colors.white)
+            canvas.drawCentredString(A4[0] / 2, 1.0 * cm, f"Página {doc_.page} — Dashboard Financeiro Premium")
+            canvas.restoreState()
+
+        doc.build(story, onFirstPage=draw_cover_page, onLaterPages=add_page_number)
+        buf.seek(0)
+        return buf.getvalue()
+
+    st.markdown("---")
+    st.markdown('<div class="section-title">📤 Exportar</div>', unsafe_allow_html=True)
+    pdf_bytes = build_pdf()
+    st.download_button("⬇️ Baixar Dashboard em PDF", data=pdf_bytes,
+                        file_name=f"dashboard_financeiro_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                        mime="application/pdf")
+
+# ---------------------------------------------------------------------------
+# Storytelling — narrativa executiva construída em cima das mesmas métricas
+# já calculadas acima (nenhuma fonte de dado nova; apenas leitura interpretativa).
+# ---------------------------------------------------------------------------
+with tab_story:
+    meses_com_dados = list(combined.index)
+    n_meses = len(meses_com_dados)
+
+    crescimento_total = None
+    if n_meses >= 2 and receita_mensal.iloc[0]:
+        crescimento_total = (receita_mensal.iloc[-1] - receita_mensal.iloc[0]) / abs(receita_mensal.iloc[0])
+    var_mensal = receita_mensal.pct_change().dropna()
+    meses_alta = int((var_mensal > 0).sum())
+    meses_baixa = int((var_mensal < 0).sum())
+    media_var_mensal = var_mensal.mean() if len(var_mensal) else None
+    cv_receita = (receita_mensal.std() / receita_mensal.mean()) if receita_mensal.mean() else None
+    best_month_name = receita_mensal.idxmax()
+    worst_month_name = receita_mensal.idxmin()
+
+    despesas_ratio = (despesas_totais / receita_total) if receita_total else 0
+    custos_ratio = (custos_totais / receita_total) if receita_total else 0
+    margem_c_ratio = (margem_contribuicao / receita_total) if receita_total else 0
+    direta_share = (combined["ReceitaDireta"].sum() / receita_total) if receita_total else 0
+    portal_share = (combined["ReceitaPortal"].sum() / receita_total) if receita_total else 0
+
+    margem_mensal = (combined["ResultadoOperacional"] /
+                      (combined["ReceitaDireta"] + combined["ReceitaPortal"]).replace(0, np.nan))
+    margem_trend_delta = None
+    if n_meses >= 4:
+        metade = n_meses // 2
+        margem_1a_metade = margem_mensal.iloc[:metade].mean()
+        margem_2a_metade = margem_mensal.iloc[metade:].mean()
+        if pd.notna(margem_1a_metade) and pd.notna(margem_2a_metade):
+            margem_trend_delta = margem_2a_metade - margem_1a_metade
+
+    # concentração de receita por dimensão (depende de haver transações detalhadas)
+    concentracoes = []
+    if combined_tx is not None:
+        total_tx = combined_tx["Valor"].sum()
+        for dim in ["Seguradora", "Produto", "Cliente", "Originador"]:
+            if total_tx and (combined_tx[dim] != "Não informado").any():
+                top = combined_tx.groupby(dim)["Valor"].sum().sort_values(ascending=False)
+                concentracoes.append((dim, top.index[0], top.iloc[0] / total_tx))
+    max_concentracao = max(concentracoes, key=lambda c: c[2]) if concentracoes else None
+
+    tendencia_txt = "sem histórico suficiente para apurar tendência"
+    if crescimento_total is not None:
+        direcao = "crescimento" if crescimento_total >= 0 else "retração"
+        tendencia_txt = (f"{direcao} acumulado de {abs(crescimento_total):.1%} entre "
+                          f"{meses_com_dados[0]} e {meses_com_dados[-1]}")
+
+    # ---- Hero: leitura executiva em uma frase ----
+    st.markdown(f"""<div class="story-hero">
+    <div class="story-kicker">📖 Leitura Executiva · {periodo_label}</div>
+    <h2>{'📈' if resultado_operacional >= 0 else '📉'} A operação fechou o período com {fmt_r(resultado_operacional)}
+    de resultado operacional ({status.lower()}), sobre {fmt_r(receita_total)} faturados — {tendencia_txt}.</h2>
+    <p>Esta aba traduz os números do dashboard em uma narrativa: de onde veio o faturamento, como ele se comportou
+    mês a mês, quanto foi consumido por custos e despesas, e onde estão as maiores concentrações de risco e
+    oportunidade da operação.</p>
+    </div>""", unsafe_allow_html=True)
+
+    # ---- Trajetória de Receita ----
+    st.markdown('<div class="story-section-title">📈 Trajetória de Receita</div>', unsafe_allow_html=True)
+    st.markdown(f"""<p class="story-p">Ao longo de {n_meses} mês(es) com dados lançados, o faturamento médio mensal
+    foi de {fmt_r(receita_mensal.mean())}, com {meses_alta} mês(es) de alta e {meses_baixa} mês(es) de queda em
+    relação ao mês anterior{f" (variação média de {media_var_mensal:+.1%} ao mês)" if media_var_mensal is not None else ""}.
+    O melhor resultado de faturamento foi em <b>{best_month_name}</b> ({fmt_r(receita_mensal[best_month_name])}) e o
+    mais fraco em <b>{worst_month_name}</b> ({fmt_r(receita_mensal[worst_month_name])}).</p>""", unsafe_allow_html=True)
+
+    if cv_receita is not None:
+        vol_label = "baixa" if cv_receita < 0.15 else ("moderada" if cv_receita < 0.35 else "alta")
+        vol_class = "good" if vol_label == "baixa" else ("warn" if vol_label == "moderada" else "bad")
+        vol_note = f"coeficiente de variação de {cv_receita:.0%}"
     else:
-        add_ranking_table("Ranking — Seguradoras", None)
+        vol_label, vol_class, vol_note = "n/d", "", "histórico insuficiente"
 
-    story.append(Spacer(1, 0.4 * cm))
-    story.append(Paragraph("Distribuição de Resultados — Sócios", styles["SectionTitle"]))
-    socio_rows = [["Sócio", "Participação", "Valor"],
-                  ["Partner", f"{partner_pct:.0%}", fmt_r(socio_partner_total)],
-                  ["Maldivas", f"{maldivas_pct:.0%}", fmt_r(socio_maldivas_total)]]
-    t_socio = Table(socio_rows, colWidths=[5 * cm, 4 * cm, 6 * cm])
-    t_socio.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("TEXTCOLOR", (0, 1), (-1, -1), HexColor(C_TEXT_DARK)),
-        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"), ("FONTSIZE", (0, 0), (-1, -1), 9.5),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")), ("ALIGN", (1, 0), (-1, -1), "CENTER"),
-    ]))
-    story.append(t_socio)
+    g1, g2, g3, g4 = st.columns(4)
+    g1.markdown(f"""<div class="story-card {'good' if (crescimento_total or 0) >= 0 else 'bad'}">
+    <div class="story-card-title">Variação no Período</div>
+    <div class="story-card-value">{f"{crescimento_total:+.1%}" if crescimento_total is not None else "-"}</div>
+    <div class="story-card-note">{meses_com_dados[0]} → {meses_com_dados[-1]}</div></div>""", unsafe_allow_html=True)
+    g2.markdown(f"""<div class="story-card good">
+    <div class="story-card-title">Melhor Mês</div>
+    <div class="story-card-value">{best_month_name}</div>
+    <div class="story-card-note">{fmt_r(receita_mensal[best_month_name])}</div></div>""", unsafe_allow_html=True)
+    g3.markdown(f"""<div class="story-card {'bad' if worst_month_name != best_month_name else 'good'}">
+    <div class="story-card-title">Mês Mais Fraco</div>
+    <div class="story-card-value">{worst_month_name}</div>
+    <div class="story-card-note">{fmt_r(receita_mensal[worst_month_name])}</div></div>""", unsafe_allow_html=True)
+    g4.markdown(f"""<div class="story-card {vol_class}">
+    <div class="story-card-title">Volatilidade da Receita</div>
+    <div class="story-card-value">{vol_label.capitalize()}</div>
+    <div class="story-card-note">{vol_note}</div></div>""", unsafe_allow_html=True)
 
-    story.append(PageBreak())
-    if ranking_df is not None:
-        add_ranking_table("Ranking — Originadores (Top 3)", ranking_df.set_index("Originador")["Valor"])
+    # ---- Estrutura de Custos e Rentabilidade ----
+    st.markdown('<div class="story-section-title">🧮 Estrutura de Custos e Rentabilidade</div>', unsafe_allow_html=True)
+    st.markdown(f"""<p class="story-p">De cada R$ 1,00 faturado, {custos_ratio:.0%} foram consumidos por impostos,
+    custo operacional e rebates diretos, restando uma margem de contribuição de {margem_c_ratio:.0%}. As despesas
+    administrativas e de pessoal absorveram mais {despesas_ratio:.0%} da receita, resultando em margem líquida de
+    {margem_lucro:.1%}. A Produção Direta respondeu por {direta_share:.0%} do faturamento e o Portal MAAS por
+    {portal_share:.0%}.</p>""", unsafe_allow_html=True)
+
+    if margem_trend_delta is not None and margem_trend_delta > 0.02:
+        st.markdown(f"""<div class="callout good"><b>📈 Rentabilidade em melhora:</b> a margem operacional média da
+        segunda metade do período ficou {margem_trend_delta:+.1%} p.p. acima da primeira metade — sinal de ganho de
+        eficiência ou de mix de receita mais rentável.</div>""", unsafe_allow_html=True)
+    elif margem_trend_delta is not None and margem_trend_delta < -0.02:
+        st.markdown(f"""<div class="callout warn"><b>📉 Rentabilidade em queda:</b> a margem operacional média caiu
+        {abs(margem_trend_delta):.1%} p.p. da primeira para a segunda metade do período — vale investigar se custos
+        e despesas cresceram acima da receita.</div>""", unsafe_allow_html=True)
+    elif margem_trend_delta is not None:
+        st.markdown("""<div class="callout info"><b>➖ Rentabilidade estável:</b> a margem operacional se manteve
+        praticamente constante ao longo do período.</div>""", unsafe_allow_html=True)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.markdown(f"""<div class="story-card"><div class="story-card-title">Custos / Receita</div>
+    <div class="story-card-value">{custos_ratio:.0%}</div>
+    <div class="story-card-note">impostos + custo operacional + rebate − co-corretagem</div></div>""", unsafe_allow_html=True)
+    c2.markdown(f"""<div class="story-card"><div class="story-card-title">Despesas / Receita</div>
+    <div class="story-card-value">{despesas_ratio:.0%}</div>
+    <div class="story-card-note">administrativas + folha/terceiros</div></div>""", unsafe_allow_html=True)
+    c3.markdown(f"""<div class="story-card good"><div class="story-card-title">Margem de Contribuição</div>
+    <div class="story-card-value">{margem_c_ratio:.0%}</div>
+    <div class="story-card-note">{fmt_r(margem_contribuicao)}</div></div>""", unsafe_allow_html=True)
+    c4.markdown(f"""<div class="story-card {'good' if margem_lucro >= 0 else 'bad'}">
+    <div class="story-card-title">Margem Líquida</div>
+    <div class="story-card-value">{margem_lucro:.1%}</div>
+    <div class="story-card-note">resultado operacional / faturamento</div></div>""", unsafe_allow_html=True)
+
+    # ---- Concentração e Risco ----
+    if concentracoes:
+        st.markdown('<div class="story-section-title">🎯 Concentração e Risco</div>', unsafe_allow_html=True)
+        st.markdown("""<p class="story-p">Concentração de receita em poucos nomes eleva o risco de dependência: a
+        perda de um único cliente, originador, seguradora ou produto pode comprometer parte relevante do
+        faturamento. Os números abaixo mostram a fatia do maior nome em cada dimensão.</p>""", unsafe_allow_html=True)
+        cc = st.columns(len(concentracoes))
+        for col, (dim, nome, share) in zip(cc, concentracoes):
+            classe = "bad" if share >= 0.5 else ("warn" if share >= 0.3 else "good")
+            col.markdown(f"""<div class="story-card {classe}"><div class="story-card-title">Top {dim}</div>
+            <div class="story-card-value">{share:.0%}</div>
+            <div class="story-card-note">{nome}</div></div>""", unsafe_allow_html=True)
+        if max_concentracao and max_concentracao[2] >= 0.4:
+            dim, nome, share = max_concentracao
+            st.markdown(f"""<div class="callout {'bad' if share >= 0.5 else 'warn'}"><b>⚠️ Risco de concentração:</b>
+            <b>{nome}</b> responde sozinho(a) por {share:.0%} da receita na dimensão <b>{dim}</b>. Recomenda-se um
+            plano de diversificação para reduzir a dependência desse único nome.</div>""", unsafe_allow_html=True)
+        else:
+            st.markdown("""<div class="callout good"><b>✅ Base pulverizada:</b> nenhuma seguradora, produto, cliente
+            ou originador concentra isoladamente uma fatia crítica da receita — a carteira está razoavelmente
+            distribuída.</div>""", unsafe_allow_html=True)
     else:
-        add_ranking_table("Ranking — Originadores", None)
+        empty_state("🎯", "Sem colunas de transação suficientes para analisar concentração de risco nesta planilha.")
 
-    story.append(Spacer(1, 0.4 * cm))
-    if combined_tx is not None and (combined_tx["Cliente"] != "Não informado").any():
-        add_ranking_table("Ranking — Clientes (Top 15)",
-                           combined_tx.groupby("Cliente")["Valor"].sum().sort_values(ascending=False).head(15))
-    else:
-        add_ranking_table("Ranking — Clientes", None)
+    # ---- Distribuição entre Sócios ----
+    st.markdown('<div class="story-section-title">🤝 Distribuição entre Sócios</div>', unsafe_allow_html=True)
+    alinhamento = "em linha com" if abs(partner_pct - partner_share) < 0.05 else "com desvio em relação a"
+    st.markdown(f"""<p class="story-p">Do resultado operacional total de {fmt_r(resultado_operacional)}, o Sócio
+    Partner ficou com {fmt_r(socio_partner_total)} ({partner_pct:.0%}) e o Sócio Maldivas com
+    {fmt_r(socio_maldivas_total)} ({maldivas_pct:.0%}), {alinhamento} a divisão contratual de referência
+    ({partner_share:.0%} / {maldivas_share:.0%}).</p>""", unsafe_allow_html=True)
 
-    story.append(Spacer(1, 0.4 * cm))
+    quarter_recv_story = combined.groupby([QUARTER_OF[m] for m in combined.index])["ValorPagarMaldivas"].sum()
+    quarter_recv_story = quarter_recv_story.reindex(
+        [q for q in quarters_available if q in {QUARTER_OF[m] for m in combined.index}])
+    if len(quarter_recv_story):
+        melhor_tri = quarter_recv_story.idxmax()
+        st.markdown(f"""<p class="story-p">Em bases trimestrais, o trimestre com maior valor a receber pela Maldivas
+        foi <b>{melhor_tri}</b> ({fmt_r(quarter_recv_story[melhor_tri])}).</p>""", unsafe_allow_html=True)
+
+    # ---- Despesas em destaque ----
     if combined_desp is not None:
-        add_ranking_table("Ranking — Despesas (Top 10)",
-                           combined_desp.groupby("Categoria")["Valor"].sum().sort_values(ascending=False).head(10))
-    else:
-        add_ranking_table("Ranking — Despesas", None)
+        rank_desp_story = combined_desp.groupby("Categoria")["Valor"].sum().sort_values(ascending=False)
+        total_desp_story = rank_desp_story.sum()
+        if len(rank_desp_story) and total_desp_story:
+            top_cat, top_val = rank_desp_story.index[0], rank_desp_story.iloc[0]
+            st.markdown(f"""<div class="callout info"><b>💸 Maior categoria de despesa:</b> <b>{top_cat}</b>
+            concentra {fmt_r(top_val)} ({top_val / total_desp_story:.0%} das despesas detalhadas na planilha) —
+            a principal alavanca de controle de custo administrativo no período.</div>""", unsafe_allow_html=True)
 
-    story.append(PageBreak())
-    story.append(Paragraph("Resumo Executivo", styles["SectionTitle"]))
-    resumo_rows = [["Indicador", "Valor"]] + [[label, fmt_r(val)] for label, val, _ in resumo_linhas]
-    t_resumo = Table(resumo_rows, colWidths=[11 * cm, 5 * cm])
-    bold_rows = [i for i, (_, _, bold) in enumerate(resumo_linhas, start=1) if bold]
-    style_cmds = [
-        ("BACKGROUND", (0, 0), (-1, 0), HexColor(C_NAVY2)), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("TEXTCOLOR", (0, 1), (-1, -1), HexColor(C_TEXT_DARK)),
-        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"), ("FONTSIZE", (0, 0), (-1, -1), 9.5),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#dddddd")), ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
-    ]
-    for r in bold_rows:
-        style_cmds.append(("FONTNAME", (0, r), (-1, r), "Helvetica-Bold"))
-        style_cmds.append(("BACKGROUND", (0, r), (-1, r), HexColor("#e8f0fe")))
-    t_resumo.setStyle(TableStyle(style_cmds))
-    story.append(t_resumo)
+    # ---- Recomendações Estratégicas ----
+    st.markdown('<div class="story-section-title">🧭 Recomendações Estratégicas</div>', unsafe_allow_html=True)
+    recos = []
+    if status == "DÉFICIT":
+        recos.append("Priorizar um plano de recuperação de curto prazo: revisar despesas administrativas e "
+                      "renegociar custos operacionais até reverter o déficit operacional.")
+    if margem_trend_delta is not None and margem_trend_delta < -0.02:
+        recos.append("Investigar a queda de margem entre a primeira e a segunda metade do período — comparar o "
+                      "crescimento de custos/despesas frente ao crescimento de receita mês a mês.")
+    if max_concentracao and max_concentracao[2] >= 0.4:
+        dim, nome, share = max_concentracao
+        recos.append(f"Reduzir a dependência de <b>{nome}</b> ({share:.0%} da receita em {dim}) diversificando a "
+                      f"base — meta sugerida: nenhum nome isolado acima de 30%.")
+    if despesas_ratio > 0.3:
+        recos.append(f"Revisar a estrutura de despesas administrativas, que hoje representam {despesas_ratio:.0%} "
+                      f"da receita — buscar eficiência em folha e terceiros.")
+    if crescimento_total is not None and crescimento_total > 0.1:
+        recos.append("Aproveitar o momentum de crescimento para negociar melhores condições comerciais com "
+                      "seguradoras e reforçar a originação nos meses de sazonalidade mais forte.")
+    if cv_receita is not None and cv_receita >= 0.35:
+        recos.append("Suavizar a sazonalidade da receita com ações comerciais recorrentes — a alta volatilidade "
+                      "mensal dificulta o planejamento de caixa.")
+    if not recos:
+        recos.append("Manter a governança atual: os indicadores do período não apontam riscos críticos de "
+                      "concentração, rentabilidade ou caixa.")
+    recos.append("Repetir esta leitura mensalmente para acompanhar a evolução dos indicadores acima e antecipar "
+                  "desvios de rota.")
 
-    def add_page_number(canvas, doc_):
-        canvas.saveState()
-        canvas.setFont("Helvetica", 8)
-        canvas.setFillColor(HexColor("#888888"))
-        canvas.drawCentredString(A4[0] / 2, 1.0 * cm, f"Página {doc_.page} — Dashboard Financeiro Premium")
-        canvas.restoreState()
+    reco_html = "".join(
+        f'<div class="reco-item"><div class="reco-num">{i}</div><div class="reco-text">{r}</div></div>'
+        for i, r in enumerate(recos, 1)
+    )
+    st.markdown(f'<div class="story-card" style="border-left-color:{C_TEAL};">{reco_html}</div>', unsafe_allow_html=True)
 
-    doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
-    buf.seek(0)
-    return buf.getvalue()
-
-st.markdown("---")
-st.markdown('<div class="section-title">📤 Exportar</div>', unsafe_allow_html=True)
-pdf_bytes = build_pdf()
-st.download_button("⬇️ Baixar Dashboard em PDF", data=pdf_bytes,
-                    file_name=f"dashboard_financeiro_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                    mime="application/pdf")
+    # ---- Conclusão ----
+    st.markdown('<div class="story-section-title">✅ Conclusão</div>', unsafe_allow_html=True)
+    foco_risco = ("O principal ponto de atenção é a concentração de receita" if
+                  (max_concentracao and max_concentracao[2] >= 0.4) else
+                  "A base de receita está razoavelmente distribuída")
+    st.markdown(f"""<p class="story-p">Em síntese, o período de {periodo_label} fecha com <b>{status.lower()}</b>
+    operacional de {fmt_r(resultado_operacional)} sobre {fmt_r(receita_total)} de faturamento (margem líquida de
+    {margem_lucro:.1%}). {foco_risco}, e a estrutura de custos consome {custos_ratio:.0%} do faturamento antes das
+    despesas administrativas. As recomendações acima priorizam, nesta ordem, saúde de caixa, rentabilidade e
+    diversificação de risco.</p>""", unsafe_allow_html=True)
