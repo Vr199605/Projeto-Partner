@@ -898,11 +898,15 @@ with tab_dash:
     k2.markdown(f"""<div class="kpi-card"><div class="kpi-label">Custos Totais</div>
         <div class="kpi-value">{fmt_r(custos_totais)}</div>{delta_html(delta_custos)}</div>""", unsafe_allow_html=True)
     k3.markdown(f"""<div class="kpi-card"><div class="kpi-label">Margem Contribuição</div>
-        <div class="kpi-value">{fmt_r(margem_contribuicao)}</div>{delta_html(delta_margem_c)}</div>""", unsafe_allow_html=True)
+        <div class="kpi-value">{fmt_r(margem_contribuicao)}</div>
+        <div style="font-size:12px;font-weight:700;color:#5a6b7d;margin-bottom:2px;">{fmt_pct(margem_c_ratio)} do faturamento</div>
+        {delta_html(delta_margem_c)}</div>""", unsafe_allow_html=True)
     k4.markdown(f"""<div class="kpi-card"><div class="kpi-label">Despesas</div>
         <div class="kpi-value">{fmt_r(despesas_totais)}</div>{delta_html(delta_despesas)}</div>""", unsafe_allow_html=True)
     k5.markdown(f"""<div class="kpi-card"><div class="kpi-label">Resultado Operacional</div>
-        <div class="kpi-value">{fmt_r(resultado_operacional)}</div>{delta_html(delta_resultado)}</div>""", unsafe_allow_html=True)
+        <div class="kpi-value">{fmt_r(resultado_operacional)}</div>
+        <div style="font-size:12px;font-weight:700;color:#5a6b7d;margin-bottom:2px;">{fmt_pct(margem_lucro)} do faturamento</div>
+        {delta_html(delta_resultado)}</div>""", unsafe_allow_html=True)
 
     st.markdown(f"""<div class="legenda-box">
     <b>Faturamento</b>: receita bruta total (Direta + Portal MAAS) · <b>Custos Totais</b>: impostos + custo operacional + rebate AAI − co-corretagem ·
