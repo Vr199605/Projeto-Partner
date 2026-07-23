@@ -155,6 +155,20 @@ st.markdown(f"""
     margin-bottom:4px; }}
 .exec-headline {{ font-size:14.5px; font-weight:600; color:#33475b; line-height:1.55; margin:6px 0 16px 44px; }}
 .exec-headline b {{ color:{C_NAVY2}; }}
+
+/* ---------------- Repasse Maldivas ---------------- */
+.mv-table {{ width:100%; border-collapse:collapse; margin-bottom:20px; border-radius:10px; overflow:hidden;
+    box-shadow:0 3px 12px rgba(10,22,40,.08); }}
+.mv-table caption {{ background:{C_NAVY}; color:white; font-weight:800; font-size:14px; padding:10px;
+    caption-side:top; text-align:center; }}
+.mv-table th {{ background:{C_NAVY2}; color:white; padding:10px 14px; font-size:12.5px; text-transform:uppercase;
+    letter-spacing:.4px; }}
+.mv-table td {{ padding:11px 14px; text-align:center; color:{C_TEXT_DARK}; background:#ffffff;
+    border-bottom:1px solid #eef1f5; font-size:14px; }}
+.mv-table tr:last-child td {{ font-weight:800; background:#e8f0fe; }}
+.mv-neg {{ color:#d9364a; font-weight:700; }}
+.mv-status {{ border-radius:10px; padding:12px 18px; font-weight:800; font-size:14px; text-align:center;
+    margin-bottom:20px; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -885,7 +899,8 @@ if crescimento_total is not None:
                       f"{meses_com_dados[0]} e {meses_com_dados[-1]}")
 
 
-tab_dash, tab_story, tab_exec = st.tabs(["📊 Dashboard", "📖 Storytelling", "🎯 Apresentação Executiva"])
+tab_dash, tab_story, tab_exec, tab_maldivas = st.tabs(
+    ["📊 Dashboard", "📖 Storytelling", "🎯 Apresentação Executiva", "🏝️ Repasse Maldivas"])
 
 with tab_dash:
     # ---------------------------------------------------------------------------
@@ -1687,3 +1702,57 @@ with tab_exec:
     ))
     st.plotly_chart(style_fig(fig_water, height=420), use_container_width=True, config=PLOTLY_CONFIG)
     st.markdown("</div>", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Repasse Maldivas — mesma prestação de contas que hoje é montada à mão:
+# quanto entra pelo Portal MAAS e é devido à Maldivas por trimestre, o
+# resultado geral do período e a divisão contratual do lucro entre os sócios.
+# Usa exatamente os mesmos agregados já validados no restante do app.
+# ---------------------------------------------------------------------------
+with tab_maldivas:
+    st.markdown('<div class="section-title">🏝️ Repasse Maldivas — Portal MAAS</div>', unsafe_allow_html=True)
+    st.markdown(f"""<p class="story-p">Resumo para prestação de contas ao sócio Maldivas: o valor a receber pelo
+    Portal MAAS por trimestre e a divisão do resultado total do período ({periodo_label}) entre os sócios.</p>""",
+                unsafe_allow_html=True)
+
+    def fmt_conta(v):
+        """Formato contábil: negativo entre parênteses e em vermelho, célula vazia
+        vira travessão — igual à planilha original que os sócios já usam."""
+        if v is None or pd.isna(v) or v == 0:
+            return "–"
+        txt = fmt_r(abs(v))
+        return f'<span class="mv-neg">({txt})</span>' if v < 0 else txt
+
+    quarter_all = (combined.groupby([QUARTER_OF[m] for m in combined.index])["ValorPagarMaldivas"]
+                   .sum().reindex(["1º Tri", "2º Tri", "3º Tri", "4º Tri"]))
+    tri_header_html = "".join(f"<th>{q}</th>" for q in quarter_all.index)
+    tri_values_html = "".join(f"<td>{fmt_conta(v)}</td>" for v in quarter_all)
+    st.markdown(f"""
+    <table class="mv-table">
+      <caption>Resultado Trimestral — Valor a Receber (Maldivas)</caption>
+      <tr>{tri_header_html}</tr>
+      <tr>{tri_values_html}</tr>
+    </table>""", unsafe_allow_html=True)
+
+    m1, m2 = st.columns([3, 2])
+    with m1:
+        st.markdown(f"""
+        <table class="mv-table">
+          <tr><th>Faturamento Total (YTD)</th><th>Lucro Líquido</th><th>Margem de Lucro</th></tr>
+          <tr><td style="font-weight:800;font-size:16px;">{fmt_r(receita_total)}</td>
+              <td style="font-weight:800;font-size:16px;">{fmt_r(resultado_operacional)}</td>
+              <td style="font-weight:800;font-size:16px;">{fmt_pct(margem_lucro)}</td></tr>
+        </table>""", unsafe_allow_html=True)
+        status_bg = "#d9f7ee" if status == "LUCRO" else "#fde2e2"
+        status_color = "#00916e" if status == "LUCRO" else "#d9364a"
+        st.markdown(f"""<div class="mv-status" style="background:{status_bg};color:{status_color};">
+        STATUS DO RESULTADO: {status}</div>""", unsafe_allow_html=True)
+    with m2:
+        ano_ref = periodo_label.split()[-1]
+        st.markdown(f"""
+        <table class="mv-table">
+          <tr><th>Share</th><th></th><th>YTD {ano_ref}</th></tr>
+          <tr><td>{partner_pct:.0%}</td><td style="text-align:left;">Partner</td><td>{fmt_r(socio_partner_total)}</td></tr>
+          <tr><td>{maldivas_pct:.0%}</td><td style="text-align:left;">Maldivas</td><td>{fmt_r(socio_maldivas_total)}</td></tr>
+          <tr><td>100%</td><td style="text-align:left;">Total {ano_ref}</td><td>{fmt_r(resultado_operacional)}</td></tr>
+        </table>""", unsafe_allow_html=True)
