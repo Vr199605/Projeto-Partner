@@ -1033,13 +1033,19 @@ with tab_dash:
     if combined_tx is not None and (combined_tx["Produto"] != "Não informado").any():
         p1, p2 = st.columns([1, 1])
         with p1:
-            fig_sun = px.sunburst(combined_tx, path=["Seguradora", "Produto"], values="Valor",
-                                   color_discrete_sequence=CH_QUALITATIVE)
-            fig_sun.update_traces(hovertemplate="<b>%{label}</b><br>R$ %{value:,.0f} · %{percentParent:.1%} do ramo<extra></extra>",
-                                   textinfo="label+percent parent", insidetextorientation="radial",
-                                   marker=dict(line=dict(color="rgba(255,255,255,.35)", width=1.5)))
-            fig_sun.update_layout(height=440)
-            st.plotly_chart(style_fig(fig_sun), use_container_width=True, config=PLOTLY_CONFIG)
+            # Sunburst não aceita valores negativos (estornos/ajustes) — eles continuam
+            # somados normalmente no ranking ao lado, só ficam de fora desta proporção.
+            tx_sun = combined_tx[combined_tx["Valor"] > 0]
+            if not tx_sun.empty:
+                fig_sun = px.sunburst(tx_sun, path=["Seguradora", "Produto"], values="Valor",
+                                       color_discrete_sequence=CH_QUALITATIVE)
+                fig_sun.update_traces(hovertemplate="<b>%{label}</b><br>R$ %{value:,.0f} · %{percentParent:.1%} do ramo<extra></extra>",
+                                       textinfo="label+percent parent", insidetextorientation="radial",
+                                       marker=dict(line=dict(color="rgba(255,255,255,.35)", width=1.5)))
+                fig_sun.update_layout(height=440)
+                st.plotly_chart(style_fig(fig_sun), use_container_width=True, config=PLOTLY_CONFIG)
+            else:
+                empty_state("🧩", "Sem valores positivos suficientes para montar a proporção Seguradora/Produto.")
         with p2:
             rank_prod = rank_dim(combined_tx, "Produto").head(15)
             total_prod = combined_tx["Valor"].sum()
@@ -1118,27 +1124,6 @@ with tab_dash:
         empty_state("🧑‍💼", "Coluna de Cliente não encontrada na aba de receitas — ranking indisponível.")
 
     # ---------------------------------------------------------------------------
-    # Ranking Despesas
-    # ---------------------------------------------------------------------------
-    st.markdown('<div class="section-title">💸 Ranking — Despesas por Categoria</div>', unsafe_allow_html=True)
-    if combined_desp is not None:
-        rank_desp = rank_dim(combined_desp, "Categoria").head(10)
-        total_desp = combined_desp["Valor"].sum()
-        fig_desp = px.bar(rank_desp[::-1], orientation="h", labels={"value": "R$", "Categoria": ""},
-                           color=rank_desp[::-1].values, color_continuous_scale=[CH_DANGER_LIGHT, CH_DANGER])
-        fig_desp.update_layout(showlegend=False, coloraxis_showscale=False,
-                               height=max(320, 34 * len(rank_desp)))
-        fig_desp.update_traces(
-            marker_line_width=0,
-            text=[fmt_r(v) for v in rank_desp[::-1].values], textposition="outside", textfont=dict(size=10.5),
-            customdata=[v / total_desp if total_desp else 0 for v in rank_desp[::-1].values],
-            hovertemplate="<b>%{y}</b><br>R$ %{x:,.0f} · %{customdata:.1%} do total<extra></extra>")
-        st.plotly_chart(finish_hbar(fig_desp, rank_desp.values, height=max(320, 34 * len(rank_desp))),
-                         use_container_width=True, config=PLOTLY_CONFIG)
-    else:
-        empty_state("💸", "Aba 'DESPESAS' não encontrada (ou sem colunas Categoria/Valor) — ranking indisponível.")
-
-    # ---------------------------------------------------------------------------
     # Resumo Executivo
     # ---------------------------------------------------------------------------
     resumo_linhas = [
@@ -1199,7 +1184,7 @@ with tab_dash:
         story.append(Paragraph("Sumário", styles["SectionTitle"]))
         secoes = ["Indicadores Principais", "Evolução Mensal", "Ranking de Seguradoras",
                   "Distribuição de Resultados (Sócios)", "Ranking de Originadores", "Ranking de Clientes",
-                  "Ranking de Despesas", "Resumo Executivo"]
+                  "Resumo Executivo"]
         for i, s in enumerate(secoes, 1):
             story.append(Paragraph(f"{i}. {s}", styles["Body"]))
         story.append(Spacer(1, 0.3 * cm))
@@ -1304,13 +1289,6 @@ with tab_dash:
                                rank_dim(combined_tx, "Cliente").head(15))
         else:
             add_ranking_table("Ranking — Clientes", None)
-
-        story.append(Spacer(1, 0.25 * cm))
-        if combined_desp is not None:
-            add_ranking_table("Ranking — Despesas (Top 10)",
-                               rank_dim(combined_desp, "Categoria").head(10))
-        else:
-            add_ranking_table("Ranking — Despesas", None)
 
         story.append(Spacer(1, 0.3 * cm))
         story.append(Paragraph("Resumo Executivo", styles["SectionTitle"]))
