@@ -276,7 +276,10 @@ def detect_month_name(sheet_name):
 # Parsing "DRE 2026"
 # ---------------------------------------------------------------------------
 def _norm(v):
-    return str(v).strip().upper() if v is not None else ""
+    """Como norm_header: remove acentos antes de comparar. Sem isso, um cabeçalho
+    real como 'CÓD. ASSESSOR' não bate com a busca por 'COD' (sem acento) e a
+    coluna correspondente nunca é encontrada — bug real visto em planilhas reais."""
+    return strip_accents(str(v)).strip().upper() if v is not None else ""
 
 def find_row(ws, label, start=1, end=None):
     end = end or ws.max_row
@@ -361,6 +364,13 @@ def parse_dre(ws):
         "SocioPartner": rs(socio_partner_row), "SocioMaldivas": rs(socio_maldivas_row),
         "ValorPagarMaldivas": rs(valor_pagar_maldivas_row),
     }, index=meses)
+    # Nas planilhas reais, Impostos/Custo/RebateAAI/Despesas/Folha são lançados como
+    # saída negativa (conferido contra a própria "MARGEM DE CONTRIBUIÇÃO" da aba:
+    # Receita + Impostos + Custo + CoCorretagem + RebateAAI bate exatamente com ela).
+    # Normalizamos para magnitude positiva aqui — abs() não altera nada em planilhas
+    # que já venham positivas, então é seguro nos dois casos.
+    for col in ["Impostos", "Custo", "RebateAAI", "Despesas", "Folha"]:
+        df[col] = df[col].abs()
     df["TemDados"] = ((df["ReceitaDireta"] + df["ReceitaPortal"]) > 0).astype(int)
     df = df.groupby(df.index).sum()
     return df.reindex([m for m in MESES_ORDEM if m in df.index])
@@ -377,6 +387,23 @@ def parse_shares(wb):
 # ---------------------------------------------------------------------------
 # Parsing de transações — caminho padrão: aba única (ex. "ASSERTIF DIRETO")
 # ---------------------------------------------------------------------------
+def find_col_valor_producao(df):
+    """Escolhe a coluna de valor certa quando a aba tem mais de uma variante de
+    comissão (comum em extratos reais: uma taxa percentual, uma 'recebida pelo
+    Partner' e a comissão operacional 'D.A' da transação em si). Prioriza a
+    coluna operacional (contém 'D.A', não é repasse/percentual) sobre as demais,
+    a mesma regra já usada no caminho de exceção das abas mensais."""
+    candidatas = [c for c in df.columns if "COMISS" in norm_header(c) and "%" not in str(c)]
+    boas = [c for c in candidatas if "PARTNER" not in norm_header(c) and "RECEBIDA" not in norm_header(c)]
+    da = [c for c in boas if "D.A" in norm_header(c)]
+    if da:
+        return da[0]
+    if boas:
+        return boas[0]
+    if candidatas:
+        return candidatas[0]
+    return find_col(df, "VALOR")
+
 def parse_transacoes(file_bytes, sheet_name):
     try:
         df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=sheet_name)
@@ -390,7 +417,7 @@ def parse_transacoes(file_bytes, sheet_name):
     col_seguradora = find_col(df, "SEGURADORA")
     col_produto = find_col(df, "PRODUTO")
     col_originador = find_col(df, "ORIGINADOR")
-    col_comissao = find_col(df, "COMISS") or find_col(df, "VALOR")
+    col_comissao = find_col_valor_producao(df)
     if col_comissao is None:
         return None
 
@@ -511,10 +538,18 @@ def parse_workbook(file_bytes, file_name):
     sobraram em busca de dados reconhecíveis — para nenhuma informação lançada
     em uma aba com nome fora do padrão ficar de fora do dashboard."""
     wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
-    sheet_dre = find_sheet(wb.sheetnames, "DRE")
-    if sheet_dre is None:
-        return None
-    df = parse_dre(wb[sheet_dre])
+    # Várias planilhas têm mais de uma aba com "DRE" no nome (ex.: "RESUMO DRE",
+    # "DRE 2026", "DRE LUCAS") — em vez de confiar só no nome, testamos cada
+    # candidata em ordem e usamos a primeira que realmente tem a estrutura
+    # esperada (linha de meses + seções PRODUÇÃO DIRETA/PORTAL MAAS/RESULTADO).
+    sheet_dre, df = None, None
+    for candidata in wb.sheetnames:
+        if "DRE" not in norm_header(candidata):
+            continue
+        tentativa = parse_dre(wb[candidata])
+        if tentativa is not None:
+            sheet_dre, df = candidata, tentativa
+            break
     if df is None:
         return None
     shares = parse_shares(wb)
@@ -613,6 +648,13 @@ def aggregate(parsed_list, selected_files, selected_months):
     partner_share = float(np.mean([p["shares"][0] for p in sel]))
     maldivas_share = float(np.mean([p["shares"][1] for p in sel]))
     return combined, combined_tx, combined_desp, (partner_share, maldivas_share)
+
+def rank_dim(df, dim, valor_col="Valor"):
+    """Ranking por dimensão (Seguradora/Produto/Originador/Cliente/Categoria), sempre
+    excluindo o placeholder 'Não informado' — ele não é uma entidade real e não deve
+    disputar posição (nem aparecer) em nenhum ranking ou gráfico de participação."""
+    valid = df[df[dim] != "Não informado"]
+    return valid.groupby(dim)[valor_col].sum().sort_values(ascending=False)
 
 def month_delta(series):
     if len(series) < 2:
@@ -757,7 +799,10 @@ receita_total = receita_mensal.sum()
 custos_totais_mensal = combined["Impostos"] + combined["Custo"] + combined["RebateAAI"] - combined["CoCorretagem"]
 custos_totais = custos_totais_mensal.sum()
 margem_contribuicao = combined["MargemContribuicao"].sum()
-despesas_totais = combined["Despesas"].sum()
+# Despesas Totais = despesas administrativas + folha/terceiros (mesma definição da
+# legenda abaixo); confirmado batendo com Resultado Operacional = Margem − Despesas.
+despesas_totais_mensal = combined["Despesas"] + combined["Folha"]
+despesas_totais = despesas_totais_mensal.sum()
 resultado_operacional = combined["ResultadoOperacional"].sum()
 margem_lucro = (resultado_operacional / receita_total) if receita_total else 0
 status = "LUCRO" if resultado_operacional >= 0 else "DÉFICIT"
@@ -766,7 +811,7 @@ periodo_label = f"{selected_months[0]} a {selected_months[-1]} 2026" if len(sele
 delta_receita = month_delta(receita_mensal)
 delta_custos = month_delta(custos_totais_mensal)
 delta_margem_c = month_delta(combined["MargemContribuicao"])
-delta_despesas = month_delta(combined["Despesas"])
+delta_despesas = month_delta(despesas_totais_mensal)
 delta_resultado = month_delta(combined["ResultadoOperacional"])
 
 # ---------------------------------------------------------------------------
@@ -829,7 +874,7 @@ if combined_tx is not None:
     total_tx = combined_tx["Valor"].sum()
     for dim in ["Seguradora", "Produto", "Cliente", "Originador"]:
         if total_tx and (combined_tx[dim] != "Não informado").any():
-            top = combined_tx.groupby(dim)["Valor"].sum().sort_values(ascending=False)
+            top = rank_dim(combined_tx, dim)
             concentracoes.append((dim, top.index[0], top.iloc[0] / total_tx))
 max_concentracao = max(concentracoes, key=lambda c: c[2]) if concentracoes else None
 
@@ -916,7 +961,7 @@ with tab_dash:
     # ---------------------------------------------------------------------------
     st.markdown('<div class="section-title">🏢 Ranking — Seguradoras</div>', unsafe_allow_html=True)
     if combined_tx is not None and (combined_tx["Seguradora"] != "Não informado").any():
-        rank_seg = combined_tx.groupby("Seguradora")["Valor"].sum().sort_values(ascending=False).head(15)
+        rank_seg = rank_dim(combined_tx, "Seguradora").head(15)
         total_seg = combined_tx["Valor"].sum()
         fig_seg = px.bar(rank_seg[::-1], orientation="h", labels={"value": "R$", "Seguradora": ""},
                           color=rank_seg[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
@@ -996,7 +1041,7 @@ with tab_dash:
             fig_sun.update_layout(height=440)
             st.plotly_chart(style_fig(fig_sun), use_container_width=True, config=PLOTLY_CONFIG)
         with p2:
-            rank_prod = combined_tx.groupby("Produto")["Valor"].sum().sort_values(ascending=False).head(15)
+            rank_prod = rank_dim(combined_tx, "Produto").head(15)
             total_prod = combined_tx["Valor"].sum()
             fig_prod = px.bar(rank_prod[::-1], orientation="h", labels={"value": "R$", "Produto": ""},
                                color=rank_prod[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
@@ -1017,7 +1062,8 @@ with tab_dash:
     st.markdown('<div class="section-title">👥 Ranking — Originadores</div>', unsafe_allow_html=True)
     ranking_df = None
     if combined_tx is not None and (combined_tx["Originador"] != "Não informado").any():
-        ranking_full = (combined_tx.groupby("Originador")
+        ranking_full = (combined_tx[combined_tx["Originador"] != "Não informado"]
+                         .groupby("Originador")
                          .agg(Valor=("Valor", "sum"), Operacoes=("Valor", "count"))
                          .assign(TicketMedio=lambda d: d["Valor"] / d["Operacoes"])
                          .sort_values("Valor", ascending=False))
@@ -1055,7 +1101,7 @@ with tab_dash:
     # ---------------------------------------------------------------------------
     st.markdown('<div class="section-title">🧑‍💼 Ranking — Clientes</div>', unsafe_allow_html=True)
     if combined_tx is not None and (combined_tx["Cliente"] != "Não informado").any():
-        rank_cli = combined_tx.groupby("Cliente")["Valor"].sum().sort_values(ascending=False).head(15)
+        rank_cli = rank_dim(combined_tx, "Cliente").head(15)
         total_cli = combined_tx["Valor"].sum()
         fig_cli = px.bar(rank_cli[::-1], orientation="h", labels={"value": "R$", "Cliente": ""},
                           color=rank_cli[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
@@ -1076,7 +1122,7 @@ with tab_dash:
     # ---------------------------------------------------------------------------
     st.markdown('<div class="section-title">💸 Ranking — Despesas por Categoria</div>', unsafe_allow_html=True)
     if combined_desp is not None:
-        rank_desp = combined_desp.groupby("Categoria")["Valor"].sum().sort_values(ascending=False).head(10)
+        rank_desp = rank_dim(combined_desp, "Categoria").head(10)
         total_desp = combined_desp["Valor"].sum()
         fig_desp = px.bar(rank_desp[::-1], orientation="h", labels={"value": "R$", "Categoria": ""},
                            color=rank_desp[::-1].values, color_continuous_scale=[CH_DANGER_LIGHT, CH_DANGER])
@@ -1105,8 +1151,9 @@ with tab_dash:
         ("Rebate AAI", combined["RebateAAI"].sum(), False),
         ("CUSTOS TOTAIS", custos_totais, True),
         ("(=) MARGEM DE CONTRIBUIÇÃO", margem_contribuicao, True),
-        ("DESPESAS TOTAIS", despesas_totais, True),
+        ("Despesas Administrativas", combined["Despesas"].sum(), False),
         ("Folha + Terceiros", combined["Folha"].sum(), False),
+        ("DESPESAS TOTAIS", despesas_totais, True),
         ("RESULTADO OPERACIONAL", resultado_operacional, True),
     ]
     st.markdown('<div class="section-title">📋 Resumo Executivo</div>', unsafe_allow_html=True)
@@ -1226,7 +1273,7 @@ with tab_dash:
         story.append(Spacer(1, 0.3 * cm))
         if combined_tx is not None and (combined_tx["Seguradora"] != "Não informado").any():
             add_ranking_table("Ranking — Seguradoras (Top 15)",
-                               combined_tx.groupby("Seguradora")["Valor"].sum().sort_values(ascending=False).head(15))
+                               rank_dim(combined_tx, "Seguradora").head(15))
         else:
             add_ranking_table("Ranking — Seguradoras", None)
 
@@ -1254,14 +1301,14 @@ with tab_dash:
         story.append(Spacer(1, 0.25 * cm))
         if combined_tx is not None and (combined_tx["Cliente"] != "Não informado").any():
             add_ranking_table("Ranking — Clientes (Top 15)",
-                               combined_tx.groupby("Cliente")["Valor"].sum().sort_values(ascending=False).head(15))
+                               rank_dim(combined_tx, "Cliente").head(15))
         else:
             add_ranking_table("Ranking — Clientes", None)
 
         story.append(Spacer(1, 0.25 * cm))
         if combined_desp is not None:
             add_ranking_table("Ranking — Despesas (Top 10)",
-                               combined_desp.groupby("Categoria")["Valor"].sum().sort_values(ascending=False).head(10))
+                               rank_dim(combined_desp, "Categoria").head(10))
         else:
             add_ranking_table("Ranking — Despesas", None)
 
@@ -1435,7 +1482,7 @@ with tab_story:
 
     # ---- Despesas em destaque ----
     if combined_desp is not None:
-        rank_desp_story = combined_desp.groupby("Categoria")["Valor"].sum().sort_values(ascending=False)
+        rank_desp_story = rank_dim(combined_desp, "Categoria")
         total_desp_story = rank_desp_story.sum()
         if len(rank_desp_story) and total_desp_story:
             top_cat, top_val = rank_desp_story.index[0], rank_desp_story.iloc[0]
@@ -1550,7 +1597,7 @@ with tab_exec:
     <div class="exec-slide-title"><span class="exec-slide-num">2</span>Performance por Originador</div>""",
                 unsafe_allow_html=True)
     if combined_tx is not None and (combined_tx["Originador"] != "Não informado").any():
-        rank_ori_exec = combined_tx.groupby("Originador")["Valor"].sum().sort_values(ascending=False)
+        rank_ori_exec = rank_dim(combined_tx, "Originador")
         total_ori_exec = rank_ori_exec.sum()
         top_ori_nome, top_ori_val = rank_ori_exec.index[0], rank_ori_exec.iloc[0]
         top_ori_share = top_ori_val / total_ori_exec if total_ori_exec else 0
@@ -1586,12 +1633,12 @@ with tab_exec:
     if tem_seg or tem_prod:
         frases = []
         if tem_seg:
-            rk_seg_exec = combined_tx.groupby("Seguradora")["Valor"].sum().sort_values(ascending=False)
+            rk_seg_exec = rank_dim(combined_tx, "Seguradora")
             tot_seg_exec = rk_seg_exec.sum()
             frases.append(f"<b>{rk_seg_exec.index[0]}</b> é a maior seguradora parceira, com "
                            f"{rk_seg_exec.iloc[0] / tot_seg_exec:.0%} da produção")
         if tem_prod:
-            rk_prod_exec = combined_tx.groupby("Produto")["Valor"].sum().sort_values(ascending=False)
+            rk_prod_exec = rank_dim(combined_tx, "Produto")
             tot_prod_exec = rk_prod_exec.sum()
             frases.append(f"<b>{rk_prod_exec.index[0]}</b> é a linha de produto mais forte, com "
                            f"{rk_prod_exec.iloc[0] / tot_prod_exec:.0%} do total")
