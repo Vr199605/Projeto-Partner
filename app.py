@@ -133,6 +133,28 @@ st.markdown(f"""
     font-weight:800; font-size:12.5px; display:flex; align-items:center; justify-content:center; }}
 .reco-text {{ font-size:13px; line-height:1.6; color:#33475b; }}
 .reco-text b {{ color:{C_NAVY2}; }}
+
+/* ---------------- Apresentação Executiva ---------------- */
+.exec-hero {{ background: linear-gradient(120deg, {C_NAVY} 0%, {C_NAVY2} 55%, {C_TEAL} 100%);
+    background-size: 200% 200%; animation: gradientShift 12s ease infinite;
+    border-radius:20px; padding:30px 34px; color:white; margin-bottom:22px;
+    box-shadow: 0 12px 32px rgba(10,22,40,.32); }}
+.exec-hero .exec-kicker {{ font-size:12px; font-weight:800; letter-spacing:1.6px; text-transform:uppercase;
+    opacity:.85; color:#dff0ff; }}
+.exec-hero h1 {{ margin:8px 0 0 0; font-size:28px; color:white; }}
+.exec-hero p {{ margin:6px 0 0 0; font-size:13.5px; color:#eaf3fb; opacity:.9; }}
+.exec-tile {{ border-radius:16px; padding:20px 18px; text-align:center; background:#ffffff;
+    color:{C_TEXT_DARK}; box-shadow:0 6px 20px rgba(10,22,40,.10); border:1px solid #eef1f5; }}
+.exec-tile-label {{ font-size:11.5px; font-weight:800; color:#5a6b7d; letter-spacing:.6px; text-transform:uppercase; }}
+.exec-tile-value {{ font-size:27px; font-weight:800; color:{C_TEXT_DARK}; margin:8px 0 2px 0; }}
+.exec-slide {{ background:#ffffff; border-radius:18px; padding:24px 26px; margin-bottom:22px;
+    box-shadow:0 4px 18px rgba(10,22,40,.07); border:1px solid #f0f2f5; }}
+.exec-slide-num {{ display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px;
+    border-radius:50%; background:{C_TEAL}; color:white; font-weight:800; font-size:13px; margin-right:10px; }}
+.exec-slide-title {{ font-size:18px; font-weight:800; color:{C_NAVY2}; display:flex; align-items:center;
+    margin-bottom:4px; }}
+.exec-headline {{ font-size:14.5px; font-weight:600; color:#33475b; line-height:1.55; margin:6px 0 16px 44px; }}
+.exec-headline b {{ color:{C_NAVY2}; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -382,6 +404,22 @@ def parse_transacoes(file_bytes, sheet_name):
     out = out[out["Valor"] != 0]
     return out if not out.empty else None
 
+def parse_transacoes_generic(file_bytes, sheet_name):
+    """Como parse_transacoes, mas só aceita a aba se ela tiver ao menos uma coluna
+    de dimensão (Cliente/Seguradora/Produto/Originador) — usado apenas na varredura
+    genérica de abas não reconhecidas, para não confundir uma aba de despesas (que
+    também tem uma coluna de valor) com uma aba de receita."""
+    try:
+        df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=sheet_name)
+    except Exception:
+        return None
+    if df is None or df.empty:
+        return None
+    tem_dimensao = any(find_col(df, k) is not None for k in ("CLIENTE", "SEGURADORA", "PRODUTO", "ORIGINADOR"))
+    if not tem_dimensao:
+        return None
+    return parse_transacoes(file_bytes, sheet_name)
+
 # ---------------------------------------------------------------------------
 # EXCEÇÃO — RJ+2026: sem aba consolidada; Seguradora/Produto/Originador/Cliente
 # vêm das abas mensais (JAN_2026, FEV_2026...). Mapeamento assumido:
@@ -466,25 +504,78 @@ def parse_despesas(file_bytes, sheet_name):
     out = out[out["Valor"] != 0]
     return out if not out.empty else None
 
-@st.cache_data(show_spinner="Lendo planilha...")
+@st.cache_data(show_spinner="Lendo todas as abas da planilha...")
 def parse_workbook(file_bytes, file_name):
+    """Lê o workbook inteiro: exige uma aba de DRE (backbone dos KPIs), tenta os
+    caminhos conhecidos de receita/despesa e, por fim, varre TODAS as abas que
+    sobraram em busca de dados reconhecíveis — para nenhuma informação lançada
+    em uma aba com nome fora do padrão ficar de fora do dashboard."""
     wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
-    if "DRE 2026" not in wb.sheetnames:
+    sheet_dre = find_sheet(wb.sheetnames, "DRE")
+    if sheet_dre is None:
         return None
-    df = parse_dre(wb["DRE 2026"])
+    df = parse_dre(wb[sheet_dre])
     if df is None:
         return None
     shares = parse_shares(wb)
 
+    usadas = {sheet_dre}
+    if "INPUTS" in wb.sheetnames:
+        usadas.add("INPUTS")
+    if "BASE" in wb.sheetnames:
+        usadas.add("BASE")
+
+    tx_fontes, desp_fontes = [], []
+
     sheet_receitas = find_sheet(wb.sheetnames, "DIRETO", "RECEITA")
     tx = parse_transacoes(file_bytes, sheet_receitas) if sheet_receitas else None
+    if tx is not None:
+        tx_fontes.append(sheet_receitas)
+        usadas.add(sheet_receitas)
+
     if tx is None:
-        tx = parse_transacoes_from_monthly(wb)  # exceção RJ+2026
+        meses_mensais = [s for s in wb.sheetnames if detect_month_name(s)]
+        tx = parse_transacoes_from_monthly(wb)  # exceção RJ+2026: abas mensais (JAN_2026, FEV_2026...)
+        if tx is not None:
+            tx_fontes.extend(meses_mensais)
+            usadas.update(meses_mensais)
 
     sheet_despesas = find_sheet(wb.sheetnames, "DESPES")
     desp = parse_despesas(file_bytes, sheet_despesas) if sheet_despesas else None
+    if desp is not None:
+        desp_fontes.append(sheet_despesas)
+        usadas.add(sheet_despesas)
 
-    return {"file_name": file_name, "df": df, "shares": shares, "tx": tx, "desp": desp}
+    # Varredura genérica: qualquer aba restante que pareça ter dados de despesa
+    # ou de receita/produção entra automaticamente, mesmo com nome fora do padrão.
+    extra_tx, extra_desp, ignoradas = [], [], []
+    for nome in wb.sheetnames:
+        if nome in usadas:
+            continue
+        d = parse_despesas(file_bytes, nome)
+        if d is not None:
+            extra_desp.append(d)
+            desp_fontes.append(nome)
+            usadas.add(nome)
+            continue
+        t = parse_transacoes_generic(file_bytes, nome)
+        if t is not None:
+            extra_tx.append(t)
+            tx_fontes.append(nome)
+            usadas.add(nome)
+            continue
+        ignoradas.append(nome)
+
+    if extra_tx:
+        tx = pd.concat([tx] + extra_tx, ignore_index=True) if tx is not None else pd.concat(extra_tx, ignore_index=True)
+    if extra_desp:
+        desp = pd.concat([desp] + extra_desp, ignore_index=True) if desp is not None else pd.concat(extra_desp, ignore_index=True)
+
+    sheets_info = {
+        "dre": sheet_dre, "transacoes": tx_fontes, "despesas": desp_fontes,
+        "ignoradas": ignoradas, "total_abas": len(wb.sheetnames),
+    }
+    return {"file_name": file_name, "df": df, "shares": shares, "tx": tx, "desp": desp, "sheets_info": sheets_info}
 
 def months_with_data(parsed_list, selected_files):
     s = set()
@@ -548,14 +639,14 @@ if logo_file is not None:
     st.session_state["logo_bytes"] = logo_file.getvalue()
 
 if not uploads:
-    st.info("Envie uma ou mais planilhas contendo a aba 'DRE 2026' para gerar o dashboard.")
+    st.info("Envie uma ou mais planilhas contendo uma aba de DRE (ex.: 'DRE 2026') para gerar o dashboard.")
     st.stop()
 
 parsed_list = []
 for f in uploads:
     data = parse_workbook(f.getvalue(), f.name)
     if data is None:
-        st.sidebar.warning(f"'{f.name}' não contém uma aba 'DRE 2026' válida — ignorado.")
+        st.sidebar.warning(f"'{f.name}' não contém uma aba de DRE válida — ignorado.")
         continue
     parsed_list.append(data)
 
@@ -564,6 +655,16 @@ if not parsed_list:
     st.stop()
 
 all_files = [p["file_name"] for p in parsed_list]
+
+with st.sidebar.expander("📄 Abas lidas por arquivo", expanded=False):
+    for p in parsed_list:
+        info = p["sheets_info"]
+        st.markdown(f"**{p['file_name']}** — {info['total_abas']} aba(s)")
+        st.caption(f"DRE: `{info['dre']}`")
+        st.caption("Receita/produção: " + (", ".join(f"`{s}`" for s in info["transacoes"]) if info["transacoes"] else "nenhuma aba reconhecida"))
+        st.caption("Despesas: " + (", ".join(f"`{s}`" for s in info["despesas"]) if info["despesas"] else "nenhuma aba reconhecida"))
+        if info["ignoradas"]:
+            st.caption("Ignoradas (sem colunas reconhecíveis): " + ", ".join(f"`{s}`" for s in info["ignoradas"]))
 
 st.sidebar.header("🔎 Planilhas")
 if "sel_files" not in st.session_state:
@@ -688,7 +789,58 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-tab_dash, tab_story = st.tabs(["📊 Dashboard", "📖 Storytelling"])
+# ---------------------------------------------------------------------------
+# Insights compartilhados — usados tanto na aba Storytelling quanto na aba
+# Apresentação Executiva, para as duas falarem exatamente os mesmos números.
+# ---------------------------------------------------------------------------
+meses_com_dados = list(combined.index)
+n_meses = len(meses_com_dados)
+
+crescimento_total = None
+if n_meses >= 2 and receita_mensal.iloc[0]:
+    crescimento_total = (receita_mensal.iloc[-1] - receita_mensal.iloc[0]) / abs(receita_mensal.iloc[0])
+var_mensal = receita_mensal.pct_change().dropna()
+meses_alta = int((var_mensal > 0).sum())
+meses_baixa = int((var_mensal < 0).sum())
+media_var_mensal = var_mensal.mean() if len(var_mensal) else None
+cv_receita = (receita_mensal.std() / receita_mensal.mean()) if receita_mensal.mean() else None
+best_month_name = receita_mensal.idxmax()
+worst_month_name = receita_mensal.idxmin()
+
+despesas_ratio = (despesas_totais / receita_total) if receita_total else 0
+custos_ratio = (custos_totais / receita_total) if receita_total else 0
+margem_c_ratio = (margem_contribuicao / receita_total) if receita_total else 0
+direta_share = (combined["ReceitaDireta"].sum() / receita_total) if receita_total else 0
+portal_share = (combined["ReceitaPortal"].sum() / receita_total) if receita_total else 0
+
+margem_mensal = (combined["ResultadoOperacional"] /
+                  (combined["ReceitaDireta"] + combined["ReceitaPortal"]).replace(0, np.nan))
+margem_trend_delta = None
+if n_meses >= 4:
+    metade = n_meses // 2
+    margem_1a_metade = margem_mensal.iloc[:metade].mean()
+    margem_2a_metade = margem_mensal.iloc[metade:].mean()
+    if pd.notna(margem_1a_metade) and pd.notna(margem_2a_metade):
+        margem_trend_delta = margem_2a_metade - margem_1a_metade
+
+# concentração de receita por dimensão (depende de haver transações detalhadas)
+concentracoes = []
+if combined_tx is not None:
+    total_tx = combined_tx["Valor"].sum()
+    for dim in ["Seguradora", "Produto", "Cliente", "Originador"]:
+        if total_tx and (combined_tx[dim] != "Não informado").any():
+            top = combined_tx.groupby(dim)["Valor"].sum().sort_values(ascending=False)
+            concentracoes.append((dim, top.index[0], top.iloc[0] / total_tx))
+max_concentracao = max(concentracoes, key=lambda c: c[2]) if concentracoes else None
+
+tendencia_txt = "sem histórico suficiente para apurar tendência"
+if crescimento_total is not None:
+    direcao = "crescimento" if crescimento_total >= 0 else "retração"
+    tendencia_txt = (f"{direcao} acumulado de {abs(crescimento_total):.1%} entre "
+                      f"{meses_com_dados[0]} e {meses_com_dados[-1]}")
+
+
+tab_dash, tab_story, tab_exec = st.tabs(["📊 Dashboard", "📖 Storytelling", "🎯 Apresentação Executiva"])
 
 with tab_dash:
     # ---------------------------------------------------------------------------
@@ -1163,52 +1315,6 @@ with tab_dash:
 # já calculadas acima (nenhuma fonte de dado nova; apenas leitura interpretativa).
 # ---------------------------------------------------------------------------
 with tab_story:
-    meses_com_dados = list(combined.index)
-    n_meses = len(meses_com_dados)
-
-    crescimento_total = None
-    if n_meses >= 2 and receita_mensal.iloc[0]:
-        crescimento_total = (receita_mensal.iloc[-1] - receita_mensal.iloc[0]) / abs(receita_mensal.iloc[0])
-    var_mensal = receita_mensal.pct_change().dropna()
-    meses_alta = int((var_mensal > 0).sum())
-    meses_baixa = int((var_mensal < 0).sum())
-    media_var_mensal = var_mensal.mean() if len(var_mensal) else None
-    cv_receita = (receita_mensal.std() / receita_mensal.mean()) if receita_mensal.mean() else None
-    best_month_name = receita_mensal.idxmax()
-    worst_month_name = receita_mensal.idxmin()
-
-    despesas_ratio = (despesas_totais / receita_total) if receita_total else 0
-    custos_ratio = (custos_totais / receita_total) if receita_total else 0
-    margem_c_ratio = (margem_contribuicao / receita_total) if receita_total else 0
-    direta_share = (combined["ReceitaDireta"].sum() / receita_total) if receita_total else 0
-    portal_share = (combined["ReceitaPortal"].sum() / receita_total) if receita_total else 0
-
-    margem_mensal = (combined["ResultadoOperacional"] /
-                      (combined["ReceitaDireta"] + combined["ReceitaPortal"]).replace(0, np.nan))
-    margem_trend_delta = None
-    if n_meses >= 4:
-        metade = n_meses // 2
-        margem_1a_metade = margem_mensal.iloc[:metade].mean()
-        margem_2a_metade = margem_mensal.iloc[metade:].mean()
-        if pd.notna(margem_1a_metade) and pd.notna(margem_2a_metade):
-            margem_trend_delta = margem_2a_metade - margem_1a_metade
-
-    # concentração de receita por dimensão (depende de haver transações detalhadas)
-    concentracoes = []
-    if combined_tx is not None:
-        total_tx = combined_tx["Valor"].sum()
-        for dim in ["Seguradora", "Produto", "Cliente", "Originador"]:
-            if total_tx and (combined_tx[dim] != "Não informado").any():
-                top = combined_tx.groupby(dim)["Valor"].sum().sort_values(ascending=False)
-                concentracoes.append((dim, top.index[0], top.iloc[0] / total_tx))
-    max_concentracao = max(concentracoes, key=lambda c: c[2]) if concentracoes else None
-
-    tendencia_txt = "sem histórico suficiente para apurar tendência"
-    if crescimento_total is not None:
-        direcao = "crescimento" if crescimento_total >= 0 else "retração"
-        tendencia_txt = (f"{direcao} acumulado de {abs(crescimento_total):.1%} entre "
-                          f"{meses_com_dados[0]} e {meses_com_dados[-1]}")
-
     # ---- Hero: leitura executiva em uma frase ----
     st.markdown(f"""<div class="story-hero">
     <div class="story-kicker">📖 Leitura Executiva · {periodo_label}</div>
@@ -1381,3 +1487,174 @@ with tab_story:
     {margem_lucro:.1%}). {foco_risco}, e a estrutura de custos consome {custos_ratio:.0%} do faturamento antes das
     despesas administrativas. As recomendações acima priorizam, nesta ordem, saúde de caixa, rentabilidade e
     diversificação de risco.</p>""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Apresentação Executiva — visão enxuta para CFO/CEO: só os gráficos que
+# realmente sustentam uma decisão sobre "como vai a produção". Usa os mesmos
+# agregados computados acima (nenhum número novo, mesma fonte de verdade).
+# ---------------------------------------------------------------------------
+with tab_exec:
+    st.markdown(f"""<div class="exec-hero">
+    <div class="exec-kicker">🎯 Apresentação Executiva · Para CFO &amp; CEO</div>
+    <h1>Como vai a produção — {periodo_label}</h1>
+    <p>{" + ".join(selected_files)} · {n_meses} mês(es) analisado(s) · Gerado em
+    {datetime.now().strftime('%d/%m/%Y às %H:%M')}</p>
+    </div>""", unsafe_allow_html=True)
+
+    e1, e2, e3, e4 = st.columns(4)
+    e1.markdown(f"""<div class="exec-tile"><div class="exec-tile-label">Faturamento</div>
+    <div class="exec-tile-value">{fmt_r(receita_total)}</div>{delta_html(delta_receita)}</div>""", unsafe_allow_html=True)
+    e2.markdown(f"""<div class="exec-tile"><div class="exec-tile-label">Resultado Operacional</div>
+    <div class="exec-tile-value">{fmt_r(resultado_operacional)}</div>{delta_html(delta_resultado)}</div>""", unsafe_allow_html=True)
+    e3.markdown(f"""<div class="exec-tile"><div class="exec-tile-label">Margem Líquida</div>
+    <div class="exec-tile-value">{margem_lucro:.1%}</div>
+    <span style="font-size:12px;color:#8a99ab;">status: {status.lower()}</span></div>""", unsafe_allow_html=True)
+    e4.markdown(f"""<div class="exec-tile"><div class="exec-tile-label">Variação no Período</div>
+    <div class="exec-tile-value">{f"{crescimento_total:+.1%}" if crescimento_total is not None else "-"}</div>
+    <span style="font-size:12px;color:#8a99ab;">{meses_com_dados[0]} → {meses_com_dados[-1]}</span></div>""",
+                unsafe_allow_html=True)
+
+    # ---- Slide 1 — Evolução da Produção ----
+    st.markdown("""<div class="exec-slide">
+    <div class="exec-slide-title"><span class="exec-slide-num">1</span>Evolução da Produção</div>""",
+                unsafe_allow_html=True)
+    tendencia_lbl = "crescimento" if (crescimento_total or 0) >= 0 else "retração"
+    st.markdown(f"""<div class="exec-headline">Faturamento saiu de <b>{fmt_r(receita_mensal.iloc[0])}</b> em
+    <b>{meses_com_dados[0]}</b> para <b>{fmt_r(receita_mensal.iloc[-1])}</b> em <b>{meses_com_dados[-1]}</b> —
+    {tendencia_lbl} acumulado(a) de <b>{f"{crescimento_total:+.1%}" if crescimento_total is not None else "n/d"}</b>,
+    com o melhor mês em <b>{best_month_name}</b> e o mais fraco em <b>{worst_month_name}</b>.</div>""",
+                unsafe_allow_html=True)
+
+    x_idx = np.arange(len(receita_mensal))
+    if len(x_idx) >= 2:
+        coef = np.polyfit(x_idx, receita_mensal.values, 1)
+        tendencia_linha = np.poly1d(coef)(x_idx)
+    else:
+        tendencia_linha = receita_mensal.values
+
+    fig_prod_evol = go.Figure()
+    fig_prod_evol.add_bar(x=combined.index, y=receita_mensal, name="Receita Bruta", marker_color=CH_BLUE,
+                           marker_line_width=0, opacity=0.92,
+                           text=[fmt_r(v) for v in receita_mensal], textposition="outside", textfont=dict(size=10),
+                           hovertemplate="<b>%{x}</b><br>Receita Bruta: R$ %{y:,.0f}<extra></extra>")
+    fig_prod_evol.add_trace(go.Scatter(x=combined.index, y=tendencia_linha, mode="lines", name="Tendência",
+                                        line=dict(color=CH_GOLD, width=3, dash="dash"),
+                                        hovertemplate="Tendência: R$ %{y:,.0f}<extra></extra>"))
+    fig_prod_evol.update_layout(showlegend=True, bargap=0.35)
+    st.plotly_chart(style_fig(fig_prod_evol, height=380, hovermode="x unified"),
+                     use_container_width=True, config=PLOTLY_CONFIG)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---- Slide 2 — Performance por Originador ----
+    st.markdown("""<div class="exec-slide">
+    <div class="exec-slide-title"><span class="exec-slide-num">2</span>Performance por Originador</div>""",
+                unsafe_allow_html=True)
+    if combined_tx is not None and (combined_tx["Originador"] != "Não informado").any():
+        rank_ori_exec = combined_tx.groupby("Originador")["Valor"].sum().sort_values(ascending=False)
+        total_ori_exec = rank_ori_exec.sum()
+        top_ori_nome, top_ori_val = rank_ori_exec.index[0], rank_ori_exec.iloc[0]
+        top_ori_share = top_ori_val / total_ori_exec if total_ori_exec else 0
+        risco_txt = (f" — concentração alta, vale atenção" if top_ori_share >= 0.4 else "")
+        st.markdown(f"""<div class="exec-headline"><b>{top_ori_nome}</b> lidera a produção com
+        {fmt_r(top_ori_val)} ({top_ori_share:.0%} do total){risco_txt}. A equipe conta com
+        {rank_ori_exec.shape[0]} originador(es) ativo(s) no período.</div>""", unsafe_allow_html=True)
+        top8_ori = rank_ori_exec.head(8)
+        fig_ori_exec = px.bar(top8_ori[::-1], orientation="h", labels={"value": "R$", "Originador": ""},
+                               color=top8_ori[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
+        fig_ori_exec.update_layout(showlegend=False, coloraxis_showscale=False, height=max(280, 34 * len(top8_ori)))
+        fig_ori_exec.update_traces(
+            marker_line_width=0, text=[fmt_r(v) for v in top8_ori[::-1].values],
+            textposition="outside", textfont=dict(size=10.5),
+            customdata=[v / total_ori_exec if total_ori_exec else 0 for v in top8_ori[::-1].values],
+            hovertemplate="<b>%{y}</b><br>R$ %{x:,.0f} · %{customdata:.1%} do total<extra></extra>")
+        st.plotly_chart(finish_hbar(fig_ori_exec, top8_ori.values, height=max(280, 34 * len(top8_ori))),
+                         use_container_width=True, config=PLOTLY_CONFIG)
+    else:
+        empty_state("👥", "Coluna de Originador não encontrada — sem dados para este gráfico.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---- Slide 3 — Mix de Seguradoras e Produtos ----
+    st.markdown("""<div class="exec-slide">
+    <div class="exec-slide-title"><span class="exec-slide-num">3</span>Mix de Seguradoras e Produtos</div>""",
+                unsafe_allow_html=True)
+    if combined_tx is not None:
+        tem_seg = (combined_tx["Seguradora"] != "Não informado").any()
+        tem_prod = (combined_tx["Produto"] != "Não informado").any()
+    else:
+        tem_seg = tem_prod = False
+
+    if tem_seg or tem_prod:
+        frases = []
+        if tem_seg:
+            rk_seg_exec = combined_tx.groupby("Seguradora")["Valor"].sum().sort_values(ascending=False)
+            tot_seg_exec = rk_seg_exec.sum()
+            frases.append(f"<b>{rk_seg_exec.index[0]}</b> é a maior seguradora parceira, com "
+                           f"{rk_seg_exec.iloc[0] / tot_seg_exec:.0%} da produção")
+        if tem_prod:
+            rk_prod_exec = combined_tx.groupby("Produto")["Valor"].sum().sort_values(ascending=False)
+            tot_prod_exec = rk_prod_exec.sum()
+            frases.append(f"<b>{rk_prod_exec.index[0]}</b> é a linha de produto mais forte, com "
+                           f"{rk_prod_exec.iloc[0] / tot_prod_exec:.0%} do total")
+        st.markdown(f'<div class="exec-headline">{"; ".join(frases)}.</div>', unsafe_allow_html=True)
+
+        m1, m2 = st.columns(2)
+        if tem_seg:
+            top6_seg = rk_seg_exec.head(6)
+            fig_seg_exec = px.bar(top6_seg[::-1], orientation="h", labels={"value": "R$", "Seguradora": ""},
+                                   color=top6_seg[::-1].values, color_continuous_scale=[CH_BLUE_LIGHT, CH_BLUE])
+            fig_seg_exec.update_layout(showlegend=False, coloraxis_showscale=False, height=280,
+                                       title="Top 6 Seguradoras")
+            fig_seg_exec.update_traces(marker_line_width=0, text=[fmt_r(v) for v in top6_seg[::-1].values],
+                                        textposition="outside", textfont=dict(size=10),
+                                        hovertemplate="<b>%{y}</b><br>R$ %{x:,.0f}<extra></extra>")
+            m1.plotly_chart(finish_hbar(fig_seg_exec, top6_seg.values, height=280),
+                             use_container_width=True, config=PLOTLY_CONFIG)
+        else:
+            m1.info("Sem coluna de Seguradora identificada nesta planilha.")
+        if tem_prod:
+            top6_prod = rk_prod_exec.head(6)
+            fig_prod_exec = px.bar(top6_prod[::-1], orientation="h", labels={"value": "R$", "Produto": ""},
+                                    color=top6_prod[::-1].values, color_continuous_scale=[CH_PURPLE, CH_PINK])
+            fig_prod_exec.update_layout(showlegend=False, coloraxis_showscale=False, height=280,
+                                        title="Top 6 Produtos")
+            fig_prod_exec.update_traces(marker_line_width=0, text=[fmt_r(v) for v in top6_prod[::-1].values],
+                                         textposition="outside", textfont=dict(size=10),
+                                         hovertemplate="<b>%{y}</b><br>R$ %{x:,.0f}<extra></extra>")
+            m2.plotly_chart(finish_hbar(fig_prod_exec, top6_prod.values, height=280),
+                             use_container_width=True, config=PLOTLY_CONFIG)
+        else:
+            m2.info("Sem coluna de Produto identificada nesta planilha.")
+    else:
+        empty_state("🧩", "Colunas de Seguradora/Produto não encontradas — sem dados para este gráfico.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---- Slide 4 — Rentabilidade (ponte Receita → Resultado) ----
+    st.markdown("""<div class="exec-slide">
+    <div class="exec-slide-title"><span class="exec-slide-num">4</span>Rentabilidade da Produção</div>""",
+                unsafe_allow_html=True)
+    if margem_trend_delta is not None and margem_trend_delta > 0.02:
+        trend_txt = f"em melhora (+{margem_trend_delta:.1%} p.p. entre a 1ª e a 2ª metade do período)"
+    elif margem_trend_delta is not None and margem_trend_delta < -0.02:
+        trend_txt = f"em queda ({margem_trend_delta:+.1%} p.p. entre a 1ª e a 2ª metade do período)"
+    else:
+        trend_txt = "estável ao longo do período"
+    st.markdown(f"""<div class="exec-headline">De cada R$ 1,00 faturado, <b>{margem_lucro:.1%}</b> vira resultado
+    líquido — margem {trend_txt}. Custos diretos consomem {custos_ratio:.0%} da receita e despesas administrativas
+    mais {despesas_ratio:.0%}.</div>""", unsafe_allow_html=True)
+
+    fig_water = go.Figure(go.Waterfall(
+        orientation="v",
+        measure=["absolute", "relative", "total", "relative", "total"],
+        x=["Receita Bruta", "Custos Diretos", "Margem de Contribuição", "Despesas", "Resultado Operacional"],
+        y=[receita_total, -custos_totais, 0, -despesas_totais, 0],
+        text=[fmt_r(receita_total), fmt_r(-custos_totais), fmt_r(margem_contribuicao),
+              fmt_r(-despesas_totais), fmt_r(resultado_operacional)],
+        textposition="outside", textfont=dict(size=11),
+        connector=dict(line=dict(color="rgba(140,150,160,.5)", width=1.2)),
+        increasing=dict(marker=dict(color=CH_BLUE)),
+        decreasing=dict(marker=dict(color=CH_DANGER)),
+        totals=dict(marker=dict(color=CH_SUCCESS if resultado_operacional >= 0 else CH_DANGER)),
+        hovertemplate="<b>%{x}</b><br>R$ %{y:,.0f}<extra></extra>",
+    ))
+    st.plotly_chart(style_fig(fig_water, height=420), use_container_width=True, config=PLOTLY_CONFIG)
+    st.markdown("</div>", unsafe_allow_html=True)
